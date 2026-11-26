@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inclusive Virtual Try-On</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Montserrat:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE: a beauty counter app that speaks plainly; describes, never judges
+   IDEA: a phone mirror app with a shelf of products along the bottom, like the brand's own try-on
+   PICTURE: the live face filling the phone, make-up placed on it, round shade chips below
+   COLOUR and TYPE: black, white and warm grey; Montserrat for app labels, Atkinson Hyperlegible for reading
+   LAYOUT: one portrait phone centred on the page; mirror on top, sheet with shelf and tabs below */
+:root{color-scheme:light dark;--page:light-dark(#e8e4df,#141414);--ink:#111;--paper:#fff;--grey:#f2f2f2;--line:#d8d8d8;--soft:#5d5d5d;--focus:#1849c9;--gold:#b8975a}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+:root.hc{--ink:#fff;--paper:#000;--grey:#000;--line:#fff;--soft:#fff;--focus:#00e5ff}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--page);font:16px/1.5 "Atkinson Hyperlegible",system-ui,sans-serif;color:light-dark(#111,#eee);overflow-x:clip}
+:root.big .phone{font-size:19px}
+:focus-visible{outline:4px solid var(--focus);outline-offset:2px}
+.notice{margin:0;background:#000;color:#fff;text-align:center;font-size:.8rem;padding:7px 14px}
+.stage{display:grid;place-items:center;padding:16px 0 28px}
+.phone{position:relative;width:min(430px,100vw);height:min(900px,calc(100vh - 70px));min-height:640px;background:#000;border-radius:30px;overflow:hidden;box-shadow:0 30px 70px -30px #0009,0 0 0 8px light-dark(#fff,#2a2a2a)}
+@media(max-width:480px){.stage{padding:0}.phone{border-radius:0;height:calc(100vh - 32px);box-shadow:none}}
+.screen{position:absolute;inset:0;display:flex;flex-direction:column}
+[hidden]{display:none!important}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.ui{font-family:Montserrat,system-ui,sans-serif}
+button,.btn{font:600 .95rem/1.2 Montserrat,system-ui,sans-serif;cursor:pointer;min-height:48px;border-radius:8px;border:1.5px solid var(--ink);background:var(--paper);color:var(--ink);padding:10px 16px;display:inline-flex;align-items:center;justify-content:center;gap:8px;text-align:center}
+.black{background:#111;color:#fff;border-color:#111}
+:root.hc .black{background:#ffd33d;color:#000;border-color:#ffd33d}
+
+/* welcome */
+.welcome{background:radial-gradient(120% 70% at 80% 15%,#f6d7c6 0,#efc0a6 38%,#e2a98d 62%,#d9a088 100%);justify-content:space-between;padding:26px 24px 26px}
+.welcome::before{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 30%,#ffffff40 45%,transparent 60%),linear-gradient(160deg,transparent 55%,#ffffff2a 62%,transparent 72%);pointer-events:none}
+.brandline{position:relative;text-align:center;font:700 .78rem/1 Montserrat,sans-serif;letter-spacing:.3em;text-transform:uppercase;color:#2b1d17;margin:10px 0 0}
+.wbody{position:relative;display:grid;gap:12px}
+.wbody h1{font:700 1.75rem/1.1 Montserrat,sans-serif;letter-spacing:.04em;text-transform:uppercase;margin:0;color:#111}
+.wbody p{margin:0 0 6px;font-size:1rem;color:#1d1d1d}
+.wbody button{width:100%;min-height:54px;font-size:1rem}
+.wbody .light{background:#f1f1f1;border-color:#111}
+.go{min-height:64px!important;font-size:1.08rem!important}
+.wlinks{display:flex;gap:10px}.wlinks button{flex:1;min-height:46px;background:#ffffffb0;border-color:#11111166;font-size:.85rem}
+:root.hc .welcome{background:#000}:root.hc .wbody h1,:root.hc .wbody p,:root.hc .brandline{color:#fff}
+
+/* consent */
+.consent{background:#000a;justify-content:center;padding:18px}
+.card{background:var(--paper);color:var(--ink);border-radius:14px;padding:22px 20px;display:grid;gap:12px;max-height:100%;overflow:auto}
+.card h2{margin:0;font:700 1.35rem/1.2 Montserrat,sans-serif;text-align:center}
+.card ul{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.card details{font-size:.9rem;color:var(--soft)}
+.card summary{cursor:pointer;font-weight:700;color:var(--ink);min-height:44px;display:flex;align-items:center}
+.hint{font-size:.9rem;color:var(--soft);margin:0}
+#consentMsg{min-height:1.2em;margin:0;font-weight:700}
+
+/* try-on */
+.try{background:#000}
+.mirror{position:relative;flex:1;overflow:hidden;background:#1a1a1a}
+#cv{position:absolute;inset:0;width:100%;height:100%}
+.topbar{position:absolute;left:12px;right:12px;top:12px;display:flex;gap:10px;align-items:flex-start}
+.topbar .sp{flex:1}
+.ico{width:50px;height:50px;min-height:50px;padding:0;border-radius:50%;border:0;background:#fff;color:#111;box-shadow:0 2px 8px #0003;flex-direction:column;gap:0}
+.ico svg{width:26px;height:26px}
+.ico .lb{display:none;font:600 .55rem/1 Montserrat,sans-serif;margin-top:2px}
+:root.big .ico{width:62px;height:62px;border-radius:14px}:root.big .ico .lb{display:block}
+:root.hc .ico{background:#000;color:#fff;border:2px solid #fff}
+.pill{position:absolute;left:0;top:78px;border-radius:0 30px 30px 0;border:0;background:#fff;color:#111;min-height:46px;padding:8px 18px 8px 14px;box-shadow:0 2px 8px #0003;font-size:.92rem}
+.pill[aria-pressed=false]{background:#e6e6e6;color:#444}
+:root.big .pill{top:92px}
+#heardBar{position:absolute;left:14px;right:14px;top:186px;background:#000c;color:#fff;font:600 .85rem/1.3 Montserrat,sans-serif;padding:8px 12px;border-radius:10px}
+#micPill[aria-pressed=true]{background:#b0204f;color:#fff}
+:root.big #micPill{top:150px!important}:root.big #heardBar{top:206px}
+#chip{position:absolute;right:12px;top:78px;background:#000b;color:#fff;font:600 .72rem/1 Montserrat,sans-serif;padding:7px 10px;border-radius:20px}
+:root.big #chip{top:92px}
+.pcard{position:absolute;left:14px;right:14px;bottom:12px;background:var(--paper);color:var(--ink);border-radius:10px;padding:10px 12px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;align-items:center;box-shadow:0 6px 20px #0004}
+.pcard .thumb{grid-row:1/3;width:64px;height:76px;border:1px solid var(--line);display:grid;place-items:center;background:#fff}
+.pcard b{font:600 1rem/1.25 Montserrat,sans-serif}
+.pcard .acts{display:flex;gap:8px;justify-content:flex-end;align-items:center}
+.sq{width:44px;height:44px;min-height:44px;padding:0;border-radius:4px;background:#111;color:#fff;border-color:#111}
+.sq svg{width:22px;height:22px}
+.sq[aria-pressed=true]{background:#b0204f;border-color:#b0204f}
+.more{background:#111;color:#fff;border-color:#111;min-height:44px;padding:8px 16px;border-radius:4px;text-decoration:none;font:600 .9rem/1 Montserrat,sans-serif;display:inline-flex;align-items:center}
+:root.hc .sq,:root.hc .more{background:#ffd33d;color:#000;border-color:#ffd33d}
+.sheet{background:var(--paper);color:var(--ink)}
+.panel{min-height:168px;border-bottom:1px solid var(--line)}
+.row{display:flex;gap:6px;overflow-x:auto;scroll-snap-type:x proximity;padding:12px 10px 8px;align-items:flex-start}
+.row::-webkit-scrollbar{height:6px}.row::-webkit-scrollbar-thumb{background:#bbb;border-radius:3px}
+.cat{flex:none;width:86px;min-height:120px;border:0;background:transparent;flex-direction:column;gap:6px;padding:6px 2px;border-radius:10px;scroll-snap-align:start;position:relative}
+.cat .art{width:64px;height:72px;display:grid;place-items:center}
+.cat .nm{font:700 .82rem/1.15 Montserrat,sans-serif}
+.cat .on{position:absolute;top:6px;right:12px;width:10px;height:10px;border-radius:50%;background:#b0204f;border:2px solid #fff}
+.cat[aria-current=true]{background:var(--grey)}
+.back{flex:none;width:30px;min-height:110px;border:0;padding:0;font-size:1.4rem;background:transparent}
+.prodbtn{flex:none;width:92px;min-height:118px;border:0;flex-direction:column;gap:4px;padding:4px;border-radius:8px;border-right:1px solid var(--line);background:transparent}
+.prodbtn[aria-pressed=true]{background:var(--grey)}
+.prodbtn small{font:700 .72rem/1.15 Montserrat,sans-serif}
+.sws{display:flex;gap:8px;align-items:flex-start;padding-left:4px}
+.sw{flex:none;position:relative;width:74px;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;scroll-snap-align:start}
+.sw input{position:absolute;opacity:0;width:1px;height:1px}
+.sw .dot{width:66px;height:66px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1px var(--line)}
+.sw.none .dot{background:repeating-linear-gradient(45deg,#fff 0 6px,#ddd 6px 8px)}
+.sw:has(input:checked) .dot{box-shadow:0 0 0 3px var(--ink)}
+.sw:has(input:focus-visible) .dot{outline:4px solid var(--focus);outline-offset:3px}
+.sw .tx{font:600 .64rem/1.15 Montserrat,sans-serif;text-align:center;color:var(--soft);max-width:74px}
+.tabs{display:flex;justify-content:center;gap:10px;padding:10px 12px 14px;background:var(--grey)}
+.tab{border:0;background:transparent;min-height:46px;padding:8px 16px;border-radius:4px;font:700 .9rem/1 Montserrat,sans-serif;text-transform:uppercase;letter-spacing:.02em}
+.tab[aria-selected=true]{background:#111;color:#fff}
+:root.hc .tab[aria-selected=true]{background:#ffd33d;color:#000}
+.pad{padding:12px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.grid2 .wide{grid-column:1/-1}
+.panel button{font-size:.84rem;min-height:46px;padding:8px 10px}
+form.cmd{display:flex;gap:6px;margin-top:8px}
+input[type=text],select{font:inherit;font-size:16px;min-height:46px;padding:6px 10px;border-radius:8px;border:1.5px solid var(--ink);background:var(--paper);color:var(--ink);flex:1}
+#log{display:grid;gap:6px;max-height:120px;overflow:auto;margin-top:8px;font-size:.88rem}
+#log p{margin:0;padding:7px 10px;background:var(--grey);border-left:3px solid var(--line)}
+#log p:first-child{border-left-color:var(--gold)}
+.tones{display:flex;gap:6px;overflow-x:auto;padding:0 10px 10px}
+.tones label{flex:none;display:flex;gap:6px;align-items:center;min-height:40px;padding:4px 10px;border:1.5px solid var(--line);border-radius:20px;font:600 .75rem/1 Montserrat,sans-serif;cursor:pointer}
+.tones label:has(input:checked){border-color:var(--ink)}
+.tones input{accent-color:#111}
+.tones i{width:18px;height:18px;border-radius:50%;display:block}
+dialog{border:0;border-radius:14px;background:var(--paper);color:var(--ink);padding:0;width:min(400px,92vw);max-height:88vh}
+dialog::backdrop{background:#000a}
+.dlg{padding:20px;display:grid;gap:10px}
+.dlg h2{margin:0;font:700 1.2rem/1.2 Montserrat,sans-serif}
+.opt{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;cursor:pointer;font-size:.95rem}
+.opt input{width:22px;height:22px;flex:none;margin-top:2px;accent-color:#111}
+.opt small{display:block;color:var(--soft)}
+.favs{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+.favs li{display:flex;gap:8px;align-items:center;justify-content:space-between;border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:.9rem}
+footer{max-width:720px;margin:0 auto;padding:0 16px 28px;font-size:.82rem;color:light-dark(#555,#aaa);text-align:center}
+@media(prefers-reduced-motion:no-preference){:root:not(.calm) .sw .dot,:root:not(.calm) .tab{transition:box-shadow .15s,background .15s}}
+</style>
+</head>
+<body>
+<p class="notice">Student concept prototype (BIP Inclusive Leadership). Not affiliated with or endorsed by L'Oréal or ModiFace. Product names belong to L'Oréal Paris; on-screen colours are estimates.</p>
+<div class="stage">
+<div class="phone" id="phone">
+
+  <section class="screen welcome" id="scrWelcome" aria-labelledby="wH">
+    <p class="brandline">Concept prototype</p>
+    <div class="wbody">
+      <h1 id="wH">Virtual try-on</h1>
+      <p>See it, hear it, or both. Lips, cheeks, complexion, eyes and brows.</p>
+      <p class="hint" style="color:#2b1d17">Press Enter or Space, or tap anywhere, to start with the audio guide.</p>
+      <button class="black go" id="goBtn" type="button">Start with audio guide</button>
+      <button class="black" id="selfieBtn" type="button">Selfie mode</button>
+      <button class="light" id="photoBtn" type="button">Upload photo</button>
+      <div class="wlinks">
+        <button id="demoBtn" type="button">Try on a model</button>
+        <button id="setBtn1" type="button">Accessibility</button>
+      </div>
+      <input id="photo" type="file" accept="image/*" hidden>
+    </div>
+  </section>
+
+  <section class="screen consent" id="scrConsent" hidden aria-labelledby="cH">
+    <div class="card" role="document">
+      <h2 id="cH">Before we use your camera</h2>
+      <ul>
+        <li>Your face is processed <b>on this device</b> to place make-up on it.</li>
+        <li>No picture or video is uploaded or kept.</li>
+        <li>You can stop at any time with the close button or by saying "stop".</li>
+      </ul>
+      <details><summary>Read the full notice</summary><p>This prototype uses an on-device face model to find 478 points on your face. Points are used only while the try-on is open and are discarded when you close it. A real service would also explain how long any data is kept, who can see it and how to delete it, in this same plain language.</p></details>
+      <button class="black" id="agreeBtn" type="button">I agree, continue</button>
+      <button id="notNowBtn" type="button">Not now</button>
+      <p class="hint">Keyboard: press A to agree, Escape to go back. Voice: say "I agree".</p>
+      <p id="consentMsg" role="status" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <section class="screen try" id="scrTry" hidden aria-label="Try-on">
+    <div class="mirror" id="mirror">
+      <canvas id="cv" role="img" aria-label="Mirror view"></canvas>
+      <div class="topbar">
+        <button class="ico" id="homeBtn" type="button" aria-label="Main menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg><span class="lb">Menu</span></button>
+        <span class="sp"></span>
+        <button class="ico" id="resetBtn" type="button" aria-label="Remove all make-up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></svg><span class="lb">Reset</span></button>
+        <button class="ico" id="saveBtn" type="button" aria-label="Save a picture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M4 19h16"/></svg><span class="lb">Save</span></button>
+        <button class="ico" id="favsBtn" type="button" aria-label="My favourites"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 1-.2 1.9-.6 2.8"/><path d="M15 15h6M15 18h6M15 21h4"/></svg><span class="lb">Favourites</span></button>
+        <button class="ico" id="closeBtn" type="button" aria-label="Close try-on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg><span class="lb">Close</span></button>
+      </div>
+      <button class="pill" id="audioPill" type="button" aria-pressed="true">Audio on</button>
+      <button class="pill" id="micPill" type="button" aria-pressed="false" style="top:132px">Voice off</button>
+      <span id="heardBar" role="status" aria-live="off" hidden></span>
+      <span id="chip" aria-hidden="true"></span>
+      <div class="pcard" id="pcard" hidden>
+        <div class="thumb" id="pThumb" aria-hidden="true"></div>
+        <b id="pName"></b>
+        <div class="acts">
+          <span id="pShade" class="ui" style="font-weight:600;margin-right:auto"></span>
+          <button class="sq" id="pRemove" type="button" aria-label="Remove"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+          <button class="sq" id="pFav" type="button" aria-pressed="false" aria-label="Add to favourites"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg></button>
+          <a class="more" id="pMore" href="#" target="_blank" rel="noopener">Learn more</a>
+        </div>
+      </div>
+    </div>
+    <div class="sheet">
+      <div class="panel" id="panelShades" role="tabpanel" aria-labelledby="tabShades">
+        <div class="row" id="catRow" role="group" aria-label="Make-up categories"></div>
+        <div class="row" id="shadeRow" hidden></div>
+        <div class="tones" id="toneBox" role="radiogroup" aria-label="Model skin tone" hidden></div>
+      </div>
+      <div class="panel pad" id="panelCompare" role="tabpanel" aria-labelledby="tabCompare" hidden>
+        <div class="grid2">
+          <button class="wide black" id="splitBtn" type="button" aria-pressed="false">Split view: before and after</button>
+          <button id="lookBtn" type="button">Describe my whole look</button>
+          <button id="bareBtn" type="button" aria-pressed="false">Hide make-up</button>
+        </div>
+        <p class="hint" style="margin-top:10px">Split view shows your face without make-up on the left and with make-up on the right.</p>
+      </div>
+      <div class="panel pad" id="panelAssist" role="tabpanel" aria-labelledby="tabAssist" hidden>
+        <div class="grid2">
+          <button class="black" id="descBtn" type="button">Describe this</button>
+          <button id="suitBtn" type="button">Does it suit me?</button>
+          <button id="guideBtn" type="button" aria-pressed="false">Guide me into frame</button>
+          <button id="lightBtn" type="button">Check my lighting</button>
+          <button id="voiceBtn" type="button" aria-pressed="false">Voice: off</button>
+          <button id="setBtn2" type="button">Settings</button>
+        </div>
+        <form class="cmd" id="cmdForm"><label for="cmd" class="sr">Type a command</label><input id="cmd" type="text" autocomplete="off" placeholder="Type: blush, next, describe, help"><button type="submit">Go</button></form>
+        <div id="log" role="log" aria-live="polite" aria-label="Assistant messages"></div>
+      </div>
+      <div class="tabs" role="tablist" aria-label="Try-on tools">
+        <button class="tab" role="tab" id="tabShades" aria-selected="true" aria-controls="panelShades" type="button">Shades</button>
+        <button class="tab" role="tab" id="tabCompare" aria-selected="false" aria-controls="panelCompare" type="button" tabindex="-1">Compare</button>
+        <button class="tab" role="tab" id="tabAssist" aria-selected="false" aria-controls="panelAssist" type="button" tabindex="-1">Assistant</button>
+      </div>
+    </div>
+  </section>
+
+  <dialog id="setDlg" aria-labelledby="setH">
+    <form method="dialog" class="dlg" id="setForm">
+      <h2 id="setH">How would you like to use this?</h2>
+      <p class="hint">Optional. We never ask about health or disability. Your device's high-contrast and reduced-motion settings are applied automatically.</p>
+      <label class="opt"><input type="checkbox" name="tts" checked><span>Read things aloud<small>A voice describes shades and guides you.</small></span></label>
+      <label class="opt"><input type="checkbox" name="sr"><span>I use a screen reader<small>The built-in voice stays quiet; your screen reader reads every message.</small></span></label>
+      <label class="opt"><input type="checkbox" name="voice"><span>Control with my voice<small>Say "blush", "next", "describe". Typing works too.</small></span></label>
+      <label class="opt"><input type="checkbox" name="big"><span>Larger text and labelled buttons</span></label>
+      <label class="opt"><input type="checkbox" name="hc"><span>High contrast</span></label>
+      <label class="opt"><input type="checkbox" name="calm"><span>Reduce motion</span></label>
+      <label class="opt" style="cursor:default"><span style="flex:1">Speaking speed<select name="rate" style="display:block;width:100%;margin-top:6px"><option value="0.85">Slower</option><option value="1" selected>Normal</option><option value="1.25">Faster</option><option value="1.5">Fastest</option></select></span></label>
+      <label class="opt" style="cursor:default"><span style="flex:1">Voice<select name="vname" style="display:block;width:100%;margin-top:6px"></select><small>"Natural" voices (Microsoft Edge) or "Premium" voices (Mac) sound most human.</small></span></label>
+      <button type="button" id="testVoice">Test this voice</button>
+      <button class="black" type="submit" value="ok">Save</button>
+    </form>
+  </dialog>
+
+  <dialog id="favDlg" aria-labelledby="favH">
+    <div class="dlg">
+      <h2 id="favH">My favourites</h2>
+      <ul class="favs" id="favList"></ul>
+      <button type="button" id="favClose">Close</button>
+    </div>
+  </dialog>
+</div>
+</div>
+<footer>Prototype notes: face tracking runs on your device; descriptions come from measured colour, not from judging appearance. Voice commands use your browser's speech service, which may send audio to its provider. Learn more links open the public L'Oréal Paris product pages.</footer>
+<video id="vid" playsinline muted hidden></video>
+
+<script>
+{
+const $ = s => document.querySelector(s);
+const cv = $('#cv'), ctx = cv.getContext('2d'), video = $('#vid'), log = $('#log'), root = document.documentElement;
+const sc = document.createElement('canvas'), sx = sc.getContext('2d', {willReadFrequently: true});
+const demoCv = document.createElement('canvas'); demoCv.width = 720; demoCv.height = 1080; const dctx = demoCv.getContext('2d');
+const MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
+const MP = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3';
+const US = 'https://www.lorealparisusa.com';
+
+/* ---------- products (names from L'Oréal Paris pages; colours estimated) ---------- */
+const CATS = [
+ {id:'lips', label:'Lips', place:'on your lips', products:[
+  {name:'Colour Riche Satin Lipstick', short:'Colour Riche', icon:'lipstick', finish:'satin', gloss:.12, url:US+'/makeup/lip-color/lipstick/colour-riche-lipcolour-wisteria-rose', shades:[
+   ['120 Rouge St. Germain','#a3162d','a classic red with a slightly cool, blue base','bold'],
+   ['125 Maison Marais','#b97a6b','a warm, rosy beige nude','subtle'],
+   ['129 Montmartre','#b4646c','a soft rose pink','medium'],
+   ['137 Berry Parisienne','#8a2444','a deep, cool berry','bold'],
+   ['185 Miss Magenta','#b2215f','a bright, cool magenta pink','bold'],
+   ['251 Wisteria Rose','#b06e7b','a dusty, cool rose','medium'],
+   ['843 Toasted Almond','#9a5e4c','a warm, brown-toned nude','medium'],
+   ['892 Raisin Rapture','#6b2a3a','a deep plum with a brown lean','bold']]},
+  {name:'Infallible Matte Resistance Liquid Lipstick', short:'Matte Resistance', icon:'liquid', finish:'matte', gloss:0, url:US+'/makeup/lip-color/liquid-lip/infallible-matte-resistance-liquid-lipstick-601-worth-it', shades:[
+   ['600 First Kiss','#c27c78','a soft, pinkish nude','subtle'],
+   ['601 Worth It','#a5675b','a warm, mid-tone nude','medium'],
+   ['Lazy Sunday','#a76f6c','a muted mauve nude','subtle'],
+   ['630 Rose Heat','#bf4f69','a warm rose pink','medium'],
+   ['Summer Fling','#cc5a4c','a warm coral','medium'],
+   ['Major Crush','#c03a4d','a pinkish red','bold'],
+   ['420 Le Rouge Paris','#b01f2b','a true, vivid red','bold'],
+   ['Wine Not','#6c1f30','a deep wine','bold']]}]},
+ {id:'foundation', label:'Foundation', place:'over your whole face', products:[
+  {name:'Infallible Pro-Matte Foundation', short:'Pro-Matte', icon:'bottle', finish:'demi-matte', url:US+'/products/makeup/face/foundation-makeup/infallible-pro-matte-foundation', shades:[
+   ['True Porcelain 099','#f3dccb','very fair'],['Classic Ivory 101','#eed3bd','fair'],['Natural Buff 103','#e3bf9f','light'],
+   ['Golden Beige 104','#d9ad85','light, golden'],['Sun Beige 106','#cf9f78','medium'],['Classic Tan 109','#b9845c','medium tan'],
+   ['Soft Sable 111','#a3704c','tan to deep'],['Cocoa 112','#8a5a3c','deep'],['Rich Chocolate 114','#6b4129','deep, rich'],['Rich Ebony 115','#523022','very deep']]}]},
+ {id:'concealer', label:'Concealer', place:'under your eyes', products:[
+  {name:'True Match Radiant Serum Concealer', short:'Radiant Serum', icon:'wand', finish:'radiant', url:'https://lorealparisusa.com/makeup/face/concealer/true-match-radiant-serum-concealer', shades:[
+   ['N1','#f0d6c3','fair, neutral'],['C2','#ead0bd','light, cool'],['W3','#e2bb98','light, warm'],['N5','#d4a47f','medium, neutral'],
+   ['W6','#c4925f','medium, warm'],['N8','#9f6d4b','medium deep, neutral'],['C10','#6e4532','deep, cool'],['N11','#55352a','very deep, neutral']]}]},
+ {id:'blush', label:'Blush', place:'on the apples of your cheeks', products:[
+  {name:'Infallible Up to 24H Fresh Wear Soft Matte Blush', short:'Fresh Wear Blush', icon:'compact', finish:'soft matte', url:'https://lorealparisusa.com/makeup/face/blush/infallible-fresh-wear-blush', shades:[
+   ['Confident Pink','#e8708f','a bright, cool pink','medium'],['Fearless Coral','#ef6f5a','a warm coral','medium'],
+   ['Daring Rosewood','#b8616f','a muted rosewood','subtle to medium'],['Legendary Berry','#a8406a','a deep berry','bold']]}]},
+ {id:'contour', label:'Contour', place:'just below your cheekbones', products:[
+  {name:'Infallible Up to 24H Fresh Wear Soft Matte Bronzer', short:'Soft Matte Bronzer', icon:'compact', finish:'soft matte', url:'https://lorealparisusa.com/makeup/face/bronzer/infallible-up-to-24h-fresh-wear-soft-matte-bronzer', shades:[
+   ['250 Light','#c08d6a','a light, warm bronze'],['300 Light Medium','#b07a56','a light-medium bronze'],['350 Medium','#9c6744','a medium bronze'],
+   ['400 Tan','#875536','a tan bronze'],['450 Deep Tan','#6f432b','a deep tan bronze'],['550 Deep Dark','#4d2c1d','a very deep bronze']]}]},
+ {id:'highlight', label:'Highlight', place:'on top of your cheekbones', products:[
+  {name:'True Match Lumi Glotion Natural Glow Enhancer', short:'Lumi Glotion', icon:'tube', finish:'dewy glow', url:US+'/makeup/face/highlighters/true-match-lumi-glotion-natural-glow-enhancer', shades:[
+   ['Fair','#f6e3d6','a pearly, fair glow'],['Light','#efcfb6','a soft champagne glow'],['Medium','#e1b08a','a golden glow'],['Deep','#b7804f','a bronze glow'],['Rich','#8a5a33','a deep copper glow']]}]},
+ {id:'eyeshadow', label:'Eyeshadow', place:'on your upper eyelids', products:[
+  {name:'Colour Riche Monos Eyeshadow', short:'Colour Riche Monos', icon:'pan', finish:'', url:US+'/products/makeup/eye/eye-shadow/colour-riche-eyeshadow', shades:[
+   ['Meet Me in Paris','#c4a08c','a soft taupe nude','subtle','matte'],['Paris Beach','#d4ae88','a sandy beige','subtle'],['Pain au Chocolat','#6b4632','a chocolate brown','medium'],
+   ['Quartz Fume','#8d8189','a smoky grey-mauve','medium'],['Violet Beaute','#7b5a8f','a violet','medium','shimmer'],['Teal Couture','#1f7c7a','a teal','bold','shimmer'],
+   ['Green Promenade','#58703c','an olive green','medium','shimmer'],['Grand Bleu','#2b4f8c','a deep blue','bold'],["Noir C'est Noir",'#1e1b1d','a soft black','bold']]}]},
+ {id:'eyeliner', label:'Eyeliner', place:'along your upper lash line, with a small wing', products:[
+  {name:'Infallible Grip Precision Felt Waterproof Eyeliner', short:'Grip Felt Liner', icon:'pen', finish:'', url:'https://lorealparisusa.com/makeup/eye/eyeliner/infallible-precision-felt-waterproof-eyeliner', shades:[
+   ['600 Black','#111111','black','bold'],['605 Brown','#4a2e22','a dark brown','medium'],['610 Gray','#4b4e52','a charcoal grey','medium'],['615 Blue','#1f3f8a','a deep blue','bold'],['620 Green','#1f5e3a','a deep green','bold']]}]},
+ {id:'brows', label:'Brows', place:'filling in your eyebrows', products:[
+  {name:'Brow Stylist Definer Eyebrow Pencil', short:'Brow Stylist', icon:'pencil', finish:'', url:US+'/makeup/eye/eyebrow/brow-stylist-definer-blonde', shades:[
+   ['385 Light Blonde','#b59a76','a light blonde'],['388 Blonde','#9e7f5c','a blonde'],['391 Dark Blonde','#86684b','a dark blonde'],['386 Taupe','#7d6a5c','a cool taupe'],
+   ['384 Auburn','#7a4a35','a red-brown auburn'],['392 Light Brunette','#6e5040','a light brown'],['387 Ash Brown','#5a4a40','a cool ash brown'],
+   ['389 Brunette','#4f3628','a natural brown'],['390 Dark Brunette','#3a271e','a dark brown'],['393 Black','#1d1a19','a soft black']]}]}
+];
+const CAT = {}; CATS.forEach((c, ci) => { c.ci = ci; CAT[c.id] = c; c.products.forEach((p, pi) => {
+  p.shades = p.shades.map(([label, hex, desc, intensity, fin], si) => {
+    const key = label.toLowerCase().replace(/[^a-z0-9. ]/g, '').replace(/\s+/g, ' ').trim();
+    const words = key.replace(/[0-9.]/g, '').trim();
+    const alias = words.split(' ').filter(w => w.length > 3).sort((a, b) => b.length - a.length)[0] || words;
+    return {label, hex, desc, intensity, finish: fin || p.finish, gloss: fin === 'shimmer' ? .25 : (p.gloss || 0), key, words, alias, num:(label.match(/\b\d{3}\b/) || [])[0], code: /^[ncw]\d/i.test(label) ? label.toLowerCase() : null, cat:c.id, p:pi, s:si};
+  });
+});});
+const ORDER = ['foundation','concealer','contour','blush','highlight','eyeshadow','eyeliner','brows','lips'];
+const LOOKS = [
+  {name:'Soft Day', items:{lips:'125 Maison Marais', blush:'Daring Rosewood', eyeshadow:'Meet Me in Paris', brows:'392 Light Brunette', highlight:'Light'}},
+  {name:'Classic Red', items:{lips:'120 Rouge St. Germain', eyeliner:'600 Black', brows:'389 Brunette'}},
+  {name:'Evening Berry', items:{lips:'137 Berry Parisienne', eyeshadow:'Violet Beaute', eyeliner:'605 Brown', blush:'Legendary Berry', contour:'350 Medium'}},
+  {name:'Sun Kissed', items:{lips:'601 Worth It', contour:'400 Tan', blush:'Fearless Coral', highlight:'Medium', eyeshadow:'Pain au Chocolat'}}
+];
+const TONES = [
+  {name:'Fair', skin:'#f3d9c8', lip:'#d49a90', hair:'#6b4a33'}, {name:'Light', skin:'#e6bd9e', lip:'#c4837a', hair:'#3b2a1f'},
+  {name:'Medium', skin:'#c99470', lip:'#a86a5f', hair:'#2a1d15'}, {name:'Tan', skin:'#a26e48', lip:'#87524a', hair:'#1d1410'},
+  {name:'Deep', skin:'#6e432e', lip:'#5a342b', hair:'#140e0b'}, {name:'Very deep', skin:'#4b2c1f', lip:'#3f251f', hair:'#0e0a08'}
+];
+
+/* MediaPipe face mesh indices */
+const OVAL = [10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109];
+const LIPO = [61,185,40,39,37,0,267,269,270,409,291,375,321,405,314,17,84,181,91,146];
+const LIPI = [78,191,80,81,82,13,312,311,310,415,308,324,318,402,317,14,87,178,88,95];
+const EYE = [{up:[33,246,161,160,159,158,157,173,133], low:[33,7,163,144,145,153,154,155,133]}, {up:[263,466,388,387,386,385,384,398,362], low:[263,249,390,373,374,380,381,382,362]}];
+const BROW = [{up:[70,63,105,66,107], low:[46,53,52,65,55]}, {up:[300,293,334,296,336], low:[276,283,282,295,285]}];
+const LIPMID = [[0,13],[17,14],[37,82],[267,312],[84,87],[314,317]];
+const SKINPTS = [50,280,205,425];
+
+const S = {screen:'welcome', src:null, cat:null, prodSel:{}, applied:{}, focus:null, hist:[], split:false, bare:false, favs:[],
+  natLip:null, skin:null, lum:null, uneven:0, face:null, lm:null, guiding:false, lastGuide:0, tone:2, mode:null, tick:0, lastT:-1, img:null,
+  label:'', consented:false, speaking:false, guideStarted:false,
+  prefs:{tts:true, sr:false, voice:false, big:false, hc:false, calm:false, rate:1, vname:'auto'}};
+
+/* ---------- maths ---------- */
+const hex2rgb = h => [1,3,5].map(i => parseInt(h.slice(i, i+2), 16));
+const rgba = (h, a) => { const [r,g,b] = hex2rgb(h); return `rgba(${r},${g},${b},${a})`; };
+const mixHex = (h, t, k) => '#' + hex2rgb(h).map((v, i) => Math.round(v + (hex2rgb(t)[i] - v)*k).toString(16).padStart(2,'0')).join('');
+function lab([r,g,b]){
+  const f = c => { c /= 255; return c <= .04045 ? c/12.92 : ((c+.055)/1.055)**2.4; };
+  const R = f(r), G = f(g), B = f(b);
+  const X = (R*.4124+G*.3576+B*.1805)/.95047, Y = R*.2126+G*.7152+B*.0722, Z = (R*.0193+G*.1192+B*.9505)/1.08883;
+  const t = v => v > .008856 ? Math.cbrt(v) : 7.787*v + 16/116;
+  return {L:116*t(Y)-16, a:500*(t(X)-t(Y)), b:200*(t(Y)-t(Z))};
+}
+const hueOf = c => { const h = Math.atan2(c.b, c.a)*180/Math.PI; return h > 180 ? h-360 : h; };
+const chroma = c => Math.hypot(c.a, c.b);
+const L2 = (a, b, t) => [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t];
+const add = (a, v, k) => [a[0]+v[0]*k, a[1]+v[1]*k];
+const dist = (a, b) => Math.hypot(a[0]-b[0], a[1]-b[1]);
+function contrastLevel(sh){
+  if (!S.skin) return null;
+  const L = lab(hex2rgb(sh.hex)), k = lab(S.skin);
+  const c = Math.abs(L.L-k.L) + Math.abs(chroma(L)-chroma(k))*.5;
+  return c > 40 ? 'high' : c > 20 ? 'medium' : 'low';
+}
+
+/* ---------- speech ---------- */
+let ctts = null, voices = [];
+try { if (window.claude && claude.use) claude.use('tts').then(t => { if (t){ ctts = t; t.onState(({state}) => { S.speaking = state === 'speaking'; }); } }).catch(() => {}); } catch (e) {}
+function loadVoices(){ try { voices = speechSynthesis.getVoices().filter(v => /^en([-_]|$)/i.test(v.lang)); } catch (e) {} }
+if ('speechSynthesis' in window){ loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
+const PREF = [/natural/i, /premium|enhanced/i, /google us english/i, /\b(ava|samantha|allison|zoe|serena|karen|moira|tessa|susan)\b/i, /google uk english female/i];
+function pickVoice(name){
+  if (name && name !== 'auto'){ const v = voices.find(v => v.name === name); if (v) return v; }
+  for (const re of PREF){ const v = voices.find(v => re.test(v.name)); if (v) return v; }
+  return voices.find(v => v.lang === 'en-US') || voices[0] || null;
+}
+const isSpeaking = () => S.speaking || (window.speechSynthesis && speechSynthesis.speaking);
+function stopSpeech(){ try { if (ctts) ctts.stop(); } catch (e) {} try { speechSynthesis.cancel(); } catch (e) {} }
+function speak(text, queue, name){
+  name = name || S.prefs.vname || 'auto';
+  if (ctts && (name === 'auto' || name.startsWith('claude:'))){
+    const voice = name.startsWith('claude:') ? name.slice(7) : 'buttery', rate = Math.min(1.5, S.prefs.rate);
+    (queue && S.speaking ? ctts.add([{text, voice, rate}]) : ctts.speak(text, {voice, rate})).catch(() => {});
+    return;
+  }
+  if (!('speechSynthesis' in window)) return;
+  try {
+    if (!queue) speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text), v = pickVoice(name);
+    if (v){ u.voice = v; u.lang = v.lang; } else u.lang = 'en-US';
+    u.rate = S.prefs.rate * (v && /natural/i.test(v.name) ? 1 : .95);
+    speechSynthesis.speak(u);
+  } catch (e) {}
+}
+function say(text, queue){
+  S.lastSaid = (queue && S.lastSaid ? S.lastSaid + ' ' : '') + text.toLowerCase().replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' ');
+  const p = document.createElement('p'); p.textContent = text; log.prepend(p);
+  while (log.children.length > 6) log.lastChild.remove();
+  if (S.prefs.tts && !S.prefs.sr) speak(text, queue);
+}
+const lumWarn = () => (S.src === 'video' || S.src === 'photo') && S.lum != null && (S.lum < .2 || S.uneven > .22);
+
+/* ---------- product icons ---------- */
+function icon(type, c, w){
+  c = c || '#c9a28a';
+  const T = {
+    lipstick:`<rect x="18" y="32" width="12" height="28" rx="2" fill="#111"/><rect x="18" y="27" width="12" height="6" fill="#c8a45a"/><path d="M20 27V12l8-5v20z" fill="${c}"/>`,
+    liquid:`<rect x="17" y="26" width="14" height="34" rx="3" fill="${c}"/><rect x="18" y="4" width="12" height="23" rx="2" fill="#111"/>`,
+    bottle:`<rect x="12" y="24" width="24" height="36" rx="5" fill="${c}" stroke="#0002"/><rect x="19" y="12" width="10" height="12" fill="#111"/><rect x="16" y="7" width="16" height="6" rx="1" fill="#111"/>`,
+    wand:`<rect x="19" y="28" width="10" height="32" rx="3" fill="${c}" stroke="#0002"/><rect x="19" y="4" width="10" height="25" rx="3" fill="#f4f4f4" stroke="#bbb"/>`,
+    compact:`<rect x="4" y="14" width="40" height="40" rx="6" fill="#151515"/><circle cx="24" cy="34" r="14" fill="${c}"/>`,
+    tube:`<path d="M15 6h18l-3 44H18z" fill="${c}" stroke="#0002"/><rect x="17" y="50" width="14" height="10" rx="1" fill="#e9e2da" stroke="#bbb"/>`,
+    pan:`<circle cx="24" cy="34" r="19" fill="#e2e2e2" stroke="#bbb"/><circle cx="24" cy="34" r="14" fill="${c}"/>`,
+    pen:`<rect x="20" y="16" width="8" height="44" rx="2" fill="#111"/><path d="M21 16l3-13 3 13z" fill="${c}"/>`,
+    pencil:`<rect x="20" y="18" width="8" height="42" rx="1" fill="#5b4b40"/><path d="M20 18l4-14 4 14z" fill="#e6cfb4"/><path d="M22.3 10l1.7-6 1.7 6z" fill="${c}"/>`
+  };
+  return `<svg viewBox="0 0 48 64" width="${w || 44}" height="${(w || 44)*64/48}" aria-hidden="true">${T[type]}</svg>`;
+}
+function lookIcon(look, w){
+  const cols = Object.entries(look.items).map(([id, lab]) => (findLabel(id, lab) || {}).hex).filter(Boolean).slice(0, 4);
+  const pos = [[16,22],[32,22],[16,40],[32,40]];
+  return `<svg viewBox="0 0 48 64" width="${w || 44}" height="${(w || 44)*64/48}" aria-hidden="true"><circle cx="24" cy="31" r="22" fill="#f1ece8"/>${cols.map((c, i) => `<circle cx="${pos[i][0]}" cy="${pos[i][1]}" r="8" fill="${c}"/>`).join('')}</svg>`;
+}
+function findLabel(id, label){ for (const p of CAT[id].products){ const s = p.shades.find(s => s.label === label); if (s) return s; } return null; }
+
+/* ---------- state helpers ---------- */
+const shadeOf = id => { const a = S.applied[id]; return a ? CAT[id].products[a.p].shades[a.s] : null; };
+const prodOf = id => { const a = S.applied[id]; return a ? CAT[id].products[a.p] : null; };
+function pushHist(){ S.hist.push(JSON.stringify(S.applied)); if (S.hist.length > 60) S.hist.shift(); }
+function setShade(id, p, s, quiet){
+  pushHist();
+  if (s < 0) delete S.applied[id]; else S.applied[id] = {p, s};
+  S.focus = s < 0 ? (Object.keys(S.applied).pop() || null) : id;
+  S.bare = false; $('#bareBtn').setAttribute('aria-pressed', false);
+  refreshUI();
+  if (quiet) return;
+  if (s < 0) say(`${CAT[id].label} removed.`);
+  else { const sh = CAT[id].products[p].shades[s]; say(`${sh.label} ${CAT[id].label === 'Lips' ? '' : CAT[id].label.toLowerCase() + ' '}on. Applied ${CAT[id].place}. Say describe, or press D, for detail.`); }
+  if (!S.src) say('Start the camera, add a photo, or try on a model to see it on a face.', true);
+}
+function undo(){
+  if (!S.hist.length){ say('Nothing to undo.'); return; }
+  S.applied = JSON.parse(S.hist.pop()); S.focus = Object.keys(S.applied).pop() || null; refreshUI();
+  say('Undone. ' + lookSummary());
+}
+function resetAll(){
+  if (!Object.keys(S.applied).length){ say('There is no make-up to remove.'); return; }
+  pushHist(); S.applied = {}; S.focus = null; refreshUI(); say('All make-up removed. Press U or say undo to bring it back.');
+}
+function applyLook(i){
+  const L = LOOKS[i]; pushHist();
+  for (const [id, label] of Object.entries(L.items)){ const sh = findLabel(id, label); if (sh) S.applied[id] = {p:sh.p, s:sh.s}; }
+  S.focus = 'lips'; refreshUI();
+  say(`${L.name} look applied. ` + Object.entries(L.items).map(([id, lab]) => `${CAT[id].label}: ${lab}`).join('; ') + '.');
+}
+
+/* ---------- UI rendering ---------- */
+const catRow = $('#catRow'), shadeRow = $('#shadeRow');
+function renderCats(){
+  catRow.innerHTML = `<button class="cat" type="button" data-cat="looks"><span class="art">${lookIcon(LOOKS[2], 46)}</span><span class="nm">Looks</span></button>` +
+    CATS.map(c => { const sh = shadeOf(c.id), pr = prodOf(c.id) || c.products[0];
+      return `<button class="cat" type="button" data-cat="${c.id}" aria-label="${c.label}${sh ? ', applied: ' + sh.label.replace(/"/g, '') : ''}">${sh ? '<span class="on" aria-hidden="true"></span>' : ''}<span class="art">${icon(pr.icon, sh ? sh.hex : pr.shades[Math.floor(pr.shades.length/2)].hex, 44)}</span><span class="nm">${c.label}</span></button>`; }).join('');
+}
+catRow.addEventListener('click', e => { const b = e.target.closest('[data-cat]'); if (b) openCat(b.dataset.cat, true); });
+function openCat(id, announce){
+  S.cat = id; setTab('Shades');
+  catRow.hidden = true; shadeRow.hidden = false;
+  if (id === 'looks'){
+    shadeRow.innerHTML = `<button class="back" type="button" id="backBtn" aria-label="Back to categories">‹</button><div class="sws" role="radiogroup" aria-label="Looks">` +
+      LOOKS.map((L, i) => `<label class="sw"><input type="radio" name="sw" value="${i}"><span class="dot" style="background:#f1ece8;display:grid;place-items:center">${lookIcon(L, 40)}</span><span class="tx">${L.name}</span></label>`).join('') + '</div>';
+    if (announce === true) say(`Looks. ${LOOKS.length} ready-made looks: ${LOOKS.map(l => l.name).join(', ')}. Use arrow keys to choose, or say a look name.`);
+  } else {
+    const c = CAT[id], pi = S.prodSel[id] != null ? S.prodSel[id] : (S.applied[id] ? S.applied[id].p : 0), pr = c.products[pi]; S.prodSel[id] = pi;
+    const cur = S.applied[id] && S.applied[id].p === pi ? S.applied[id].s : -1;
+    shadeRow.innerHTML = `<button class="back" type="button" id="backBtn" aria-label="Back to categories">‹</button>` +
+      c.products.map((p, i) => `<button class="prodbtn" type="button" data-p="${i}" aria-pressed="${i === pi}" aria-label="${p.name}">${icon(p.icon, p.shades[2] ? p.shades[2].hex : p.shades[0].hex, 40)}<small>${p.short}</small></button>`).join('') +
+      `<div class="sws" role="radiogroup" aria-label="${pr.name} shades"><label class="sw none"><input type="radio" name="sw" value="-1" ${cur < 0 ? 'checked' : ''}><span class="dot"></span><span class="tx">None</span></label>` +
+      pr.shades.map((s, i) => `<label class="sw" title="${s.label}"><input type="radio" name="sw" value="${i}" ${i === cur ? 'checked' : ''}><span class="dot" style="background:${s.hex}"></span><span class="tx">${s.label}</span><span class="sr">, ${s.desc}</span></label>`).join('') + '</div>';
+    if (announce === true) say(`${c.label}. ${pr.name}. ${pr.shades.length} shades, from ${pr.shades[0].label} to ${pr.shades[pr.shades.length-1].label}. Use arrow keys, or say next, or a shade name.`);
+  }
+  $('#backBtn').onclick = () => closeCat(true);
+  const first = shadeRow.querySelector('input:checked') || shadeRow.querySelector('input'); if (first && announce === true) first.focus({preventScroll:true});
+  const chk = shadeRow.querySelector('input:checked'); if (chk) chk.closest('.sw').scrollIntoView({block:'nearest', inline:'center'});
+}
+shadeRow.addEventListener('change', e => {
+  if (e.target.name !== 'sw') return;
+  const v = +e.target.value;
+  if (S.cat === 'looks') applyLook(v); else setShade(S.cat, S.prodSel[S.cat], v);
+});
+shadeRow.addEventListener('click', e => {
+  const b = e.target.closest('.prodbtn'); if (!b) return;
+  S.prodSel[S.cat] = +b.dataset.p; openCat(S.cat, true);
+});
+function closeCat(announce){
+  S.cat = null; shadeRow.hidden = true; catRow.hidden = false; renderCats();
+  const b = catRow.querySelector('.cat'); if (b && announce) b.focus();
+  if (announce) say('Categories: Looks, ' + CATS.map(c => c.label).join(', ') + '.');
+}
+function step(d){
+  if (!S.cat){ openCat('lips', true); return; }
+  if (S.cat === 'looks'){ const n = LOOKS.length, cur = +(shadeRow.querySelector('input:checked') || {value:-1}).value; const i = (cur + d + n) % n; applyLook(i); syncSwatch(i); return; }
+  const pi = S.prodSel[S.cat] || 0, n = CAT[S.cat].products[pi].shades.length;
+  const a = S.applied[S.cat], cur = a && a.p === pi ? a.s : -1;
+  const i = cur < 0 ? (d > 0 ? 0 : n-1) : (cur + d + n) % n;
+  setShade(S.cat, pi, i); syncSwatch(i);
+}
+function syncSwatch(i){ const r = shadeRow.querySelector(`input[value="${i}"]`); if (r){ r.checked = true; r.closest('.sw').scrollIntoView({block:'nearest', inline:'center'}); } }
+function renderCard(){
+  const id = S.focus, sh = id && shadeOf(id), card = $('#pcard');
+  if (!sh || S.screen !== 'try'){ card.hidden = true; return; }
+  const pr = prodOf(id); card.hidden = false;
+  $('#pThumb').innerHTML = icon(pr.icon, sh.hex, 40);
+  $('#pName').textContent = pr.name; $('#pShade').textContent = sh.label;
+  $('#pRemove').setAttribute('aria-label', `Remove ${sh.label} ${CAT[id].label.toLowerCase()}`);
+  const fav = S.favs.some(f => f.cat === id && f.p === sh.p && f.s === sh.s);
+  $('#pFav').setAttribute('aria-pressed', fav); $('#pFav').setAttribute('aria-label', fav ? `Remove ${sh.label} from favourites` : `Add ${sh.label} to favourites`);
+  $('#pMore').href = pr.url; $('#pMore').setAttribute('aria-label', `Learn more about ${pr.name} on the L'Oréal Paris website, opens in a new tab`);
+}
+function refreshUI(){
+  renderCard();
+  if (!S.cat) renderCats();
+  else if (S.cat !== 'looks'){ const a = S.applied[S.cat], pi = S.prodSel[S.cat] || 0; syncSwatch(a && a.p === pi ? a.s : -1); }
+  status(true);
+}
+$('#pRemove').onclick = () => { if (S.focus) setShade(S.focus, 0, -1); };
+$('#pFav').onclick = toggleFav;
+function toggleFav(){
+  const id = S.focus, sh = id && shadeOf(id); if (!sh){ say('Choose a shade first.'); return; }
+  const i = S.favs.findIndex(f => f.cat === id && f.p === sh.p && f.s === sh.s);
+  if (i > -1){ S.favs.splice(i, 1); say(`${sh.label} removed from favourites.`); } else { S.favs.push({cat:id, p:sh.p, s:sh.s}); say(`${sh.label} added to favourites.`); }
+  renderCard();
+}
+$('#favsBtn').onclick = () => {
+  const list = $('#favList');
+  list.innerHTML = S.favs.length ? S.favs.map((f, i) => { const sh = CAT[f.cat].products[f.p].shades[f.s]; return `<li><span>${CAT[f.cat].label}: ${sh.label}</span><button type="button" data-i="${i}">Apply</button></li>`; }).join('') : '<li>No favourites yet. Use the heart on the product card.</li>';
+  $('#favDlg').showModal();
+  say(S.favs.length ? `You have ${S.favs.length} favourite${S.favs.length > 1 ? 's' : ''}.` : 'No favourites yet.');
+};
+$('#favList').addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (!b) return; const f = S.favs[+b.dataset.i]; $('#favDlg').close(); setShade(f.cat, f.p, f.s); });
+$('#favClose').onclick = () => $('#favDlg').close();
+
+/* tabs */
+const TABS = ['Shades','Compare','Assist'];
+function setTab(name){
+  for (const t of TABS){ const on = t === name; $('#tab' + t).setAttribute('aria-selected', on); $('#tab' + t).tabIndex = on ? 0 : -1; $('#panel' + t).hidden = !on; }
+}
+document.querySelector('.tabs').addEventListener('click', e => { const b = e.target.closest('.tab'); if (b) setTab(b.id.slice(3)); });
+document.querySelector('.tabs').addEventListener('keydown', e => {
+  if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+  const cur = TABS.findIndex(t => $('#tab' + t).getAttribute('aria-selected') === 'true');
+  const n = TABS[(cur + (e.key === 'ArrowRight' ? 1 : 2)) % 3]; setTab(n); $('#tab' + n).focus(); e.preventDefault();
+});
+
+/* ---------- describing ---------- */
+function describeItem(id){
+  const sh = shadeOf(id), pr = prodOf(id); if (!sh) return `No ${CAT[id].label.toLowerCase()} applied.`;
+  let t = `L'Oréal Paris ${pr.name}, shade ${sh.label}. Applied ${CAT[id].place}.`;
+  if (id === 'foundation' || id === 'concealer'){
+    t += ` It is a ${sh.desc} shade${sh.code ? `; the letter ${sh.code[0].toUpperCase()} means ${{n:'neutral', c:'cool', w:'warm'}[sh.code[0]]} undertone` : ''}.`;
+    if (S.skin){
+      const a = lab(hex2rgb(sh.hex)), k = lab(S.skin), dL = a.L - k.L, dh = hueOf(a) - hueOf(k);
+      const depth = Math.abs(dL) < 5 ? 'a close match to your skin in depth' : dL > 0 ? (dL > 12 ? 'clearly lighter than your skin' : 'slightly lighter than your skin') : (dL < -12 ? 'clearly deeper than your skin' : 'slightly deeper than your skin');
+      const warm = dh > 6 ? 'warmer and more golden' : dh < -6 ? 'cooler and more pink' : 'similar in undertone';
+      t += ` Measured against your skin, it is ${depth}, and ${warm}.`;
+      if (id === 'foundation') t += dL > 12 ? ' It may look pale or greyish, with a visible edge at the jaw.' : dL < -12 ? ' It would look like a tan, with a visible edge at the jaw.' : Math.abs(dL) < 5 ? ' It should blend in without a visible edge.' : '';
+      else t += dL >= 15 ? ' This much lighter can look grey or chalky under the eyes.' : dL > 3 ? ' That is typical for brightening under the eyes.' : '';
+    }
+  } else if (id === 'lips'){
+    t += ` It is ${sh.desc}, with a ${sh.finish} finish. Intensity: ${sh.intensity}.`;
+    if (S.natLip){
+      const a = lab(hex2rgb(sh.hex)), n = lab(S.natLip), dL = a.L - n.L, dh = hueOf(a) - hueOf(n);
+      t += ` Compared with your natural lip colour, it is ${dL > 8 ? 'lighter' : dL < -8 ? 'deeper' : 'close in depth'} and ${dh > 6 ? 'warmer' : dh < -6 ? 'cooler' : 'similar in warmth'}.`;
+    }
+  } else {
+    t += ` It is ${sh.desc}${sh.finish ? ', ' + sh.finish : ''}${sh.intensity ? '. Intensity: ' + sh.intensity : ''}.`;
+    const c = contrastLevel(sh);
+    if (c && id !== 'brows' && id !== 'eyeliner') t += ` Against your skin it shows ${c} contrast, so it will ${c === 'high' ? 'stand out clearly' : c === 'medium' ? 'be noticeable without dominating' : 'look subtle and blended'}.`;
+  }
+  if (S.src === 'video' && !S.lm) t += ' I cannot see your face right now, so this describes the shade itself.';
+  if (lumWarn()) t += ' The lighting is dim or uneven, so colours are hard to judge.';
+  return t;
+}
+function describe(){
+  const id = S.focus || (S.cat && S.cat !== 'looks' ? S.cat : null);
+  if (!id || !shadeOf(id)){ say('Nothing applied yet. Choose a category, then a shade.'); return; }
+  say(describeItem(id));
+}
+function lookSummary(){
+  const ids = ORDER.filter(id => S.applied[id]);
+  return ids.length ? `You are wearing ${ids.length} product${ids.length > 1 ? 's' : ''}: ` + ids.map(id => `${CAT[id].label}, ${shadeOf(id).label}`).join('; ') + '.' : 'No make-up applied.';
+}
+function describeLook(){ say(lookSummary()); }
+function opinion(){
+  const id = S.focus, sh = id && shadeOf(id);
+  if (!sh){ say('Choose a shade first, then ask again.'); return; }
+  let what;
+  if ((id === 'foundation' || id === 'concealer') && S.skin){
+    const dL = lab(hex2rgb(sh.hex)).L - lab(S.skin).L;
+    what = Math.abs(dL) < 5 ? 'It is a close match, which is what most people look for in a base.' : `Most people choose a base close to their own depth, and this one is ${dL > 0 ? 'lighter' : 'deeper'}. You may want to try ${dL > 0 ? 'a deeper' : 'a lighter'} shade.`;
+  } else {
+    const c = contrastLevel(sh) || 'medium';
+    what = `It gives ${c} contrast with your skin. ` + (c === 'high' ? 'High contrast is often chosen when you want this feature to be the focus.' : c === 'medium' ? 'Medium contrast usually reads as polished without taking over.' : 'Low contrast tends to look natural and easy for every day.');
+  }
+  say(`You asked for my view, so this is an opinion, not a rule. ${what} What suits you depends on the look you want, and that choice is yours.`);
+}
+function lightCheck(){
+  if (S.src === 'demo'){ say('The model uses even studio lighting, so colours are shown accurately.'); return; }
+  if (!S.src){ say('Start the camera or add a photo first.'); return; }
+  if (S.lum == null){ say('I cannot measure the light yet. Try again in a second.'); return; }
+  if (S.lum < .2) say('We need more light. If you can, face a window or a lamp. If that is hard, you can keep going, but colours may look darker than they are.');
+  else if (S.lum > .85) say('The light is very bright and may wash out colours. Slightly softer light would help.');
+  else if (S.uneven > .22) say('One side of your face is in shadow. Light from in front of you gives the most accurate colour.');
+  else say('Lighting looks good. Colours should be shown accurately.');
+}
+
+/* ---------- framing guidance ---------- */
+const guideBtn = $('#guideBtn');
+function toggleGuide(on, queue){
+  S.guiding = on == null ? !S.guiding : on; guideBtn.setAttribute('aria-pressed', S.guiding);
+  if (!S.guiding){ say('Guidance off.'); return; }
+  if (S.src !== 'video'){ S.guiding = false; guideBtn.setAttribute('aria-pressed', false); say(S.src === 'demo' ? 'The model is already centred.' : 'Framing guidance works with the live camera.'); return; }
+  S.lastGuide = 0; say('Guidance on. Hold your device at eye level. I will tell you how to move.', queue);
+}
+function guideStep(now){
+  if (!S.guiding || now - S.lastGuide < 2800 || isSpeaking()) return;
+  S.lastGuide = now; const f = S.face;
+  if (!f){ say('I cannot see your face. Hold the device about an arm length away, at eye level.'); return; }
+  const m = [];
+  if (f.w < .3) m.push('move a little closer'); else if (f.w > .8) m.push('move back a little');
+  if (f.cx > .62) m.push('move slightly to your left'); else if (f.cx < .38) m.push('move slightly to your right');
+  if (f.cy < .3) m.push('lower your face a little'); else if (f.cy > .6) m.push('raise your face a little');
+  if (!m.length){ S.guiding = false; guideBtn.setAttribute('aria-pressed', false); say('Your face is centred. You are ready. Say a category such as lips or blush.' + (lumWarn() ? ' The light is a bit low; say light check for tips.' : '')); }
+  else { const s = m.join(', and '); say(s[0].toUpperCase() + s.slice(1) + '.'); }
+}
+
+/* ---------- face model ---------- */
+let landmarker = null, loading = null;
+function ensureModel(){
+  if (landmarker) return Promise.resolve(landmarker);
+  if (loading) return loading;
+  loading = (async () => {
+    let v = null;
+    for (const u of [MP + '/vision_bundle.mjs', MP + '/+esm', MP]){
+      try { const m = await import(u); v = m.FaceLandmarker ? m : (m.default && m.default.FaceLandmarker ? m.default : null); if (v) break; } catch (e) {}
+    }
+    if (!v) return null;
+    const fs = await v.FilesetResolver.forVisionTasks(MP + '/wasm');
+    const opts = d => ({baseOptions:{modelAssetPath:MODEL, delegate:d}, runningMode:'VIDEO', numFaces:1});
+    try { landmarker = await v.FaceLandmarker.createFromOptions(fs, opts('GPU')); }
+    catch (e) { landmarker = await v.FaceLandmarker.createFromOptions(fs, opts('CPU')); }
+    S.mode = 'VIDEO'; return landmarker;
+  })().catch(() => null);
+  return loading;
+}
+async function setMode(m){ if (landmarker && S.mode !== m){ await landmarker.setOptions({runningMode:m}); S.mode = m; } }
+
+/* ---------- screens and sources ---------- */
+function show(name){
+  S.screen = name;
+  $('#scrWelcome').hidden = name !== 'welcome'; $('#scrConsent').hidden = name !== 'consent'; $('#scrTry').hidden = name !== 'try';
+  if (name === 'try'){ sizeCanvas(); renderCats(); renderCard(); }
+  if (name === 'welcome') $('#goBtn').focus();
+}
+function stopCamera(){ const st = video.srcObject; if (st) st.getTracks().forEach(t => t.stop()); video.srcObject = null; }
+function resetFace(){ S.lm = null; S.face = null; S.natLip = null; S.skin = null; S.lum = null; S.uneven = 0; }
+function goHome(){ stopCamera(); S.src = null; S.guiding = false; resetFace(); stopVoiceIfGuide(); show('welcome'); say('Back to the start.'); }
+let afterConsent = null;
+function needConsent(next){
+  if (S.consented){ next(); return; }
+  afterConsent = next; show('consent'); $('#consentMsg').textContent = ''; $('#agreeBtn').focus();
+  say('Before we use your camera. Your face is processed on this device to place make-up. No picture or video is uploaded or kept. You can stop at any time. To agree, press A or the I agree button, or say I agree. To go back, press Escape or say not now.', true);
+}
+function agree(){
+  if (S.screen !== 'consent') return;
+  S.consented = true; $('#consentMsg').textContent = 'Thank you.'; const n = afterConsent; afterConsent = null; if (n) n();
+}
+$('#agreeBtn').onclick = agree;
+$('#notNowBtn').onclick = () => { afterConsent = null; show('welcome'); say('No problem. You can try on a model without a camera.'); };
+
+async function startCamera(guided){
+  show('try'); resetFace(); toneBox.hidden = true;
+  try {
+    const st = await navigator.mediaDevices.getUserMedia({video:{facingMode:'user', width:{ideal:1280}, height:{ideal:720}}, audio:false});
+    video.srcObject = st; await video.play(); S.src = 'video';
+    say('Camera on. Loading face tracking, this takes a few seconds.', guided);
+    await ensureModel();
+    if (landmarker){ await setMode('VIDEO'); if (guided){ say('Face tracking ready. I will now help you face the camera.', true); toggleGuide(true, true); } else say('Face tracking ready. Choose a category below.'); }
+    else say('Face tracking could not load here, so make-up cannot be placed on your face. You can still hear shade descriptions, or try on a model.', guided);
+  } catch (e) {
+    useDemo(true);
+    say('The camera is not available here, so I opened a model instead. Choose a category, for example say lips, or press 1.', guided);
+  }
+}
+async function usePhoto(file){
+  const img = new Image(); img.src = URL.createObjectURL(file);
+  try { await img.decode(); } catch (e) { say('That file could not be opened as an image.'); return; }
+  stopCamera(); resetFace(); show('try'); toneBox.hidden = true; S.src = 'photo'; S.img = img;
+  say('Photo added. Looking for your face.');
+  await ensureModel();
+  if (!landmarker){ say('Face tracking could not load here. Try on a model instead.'); return; }
+  await setMode('IMAGE'); const r = landmarker.detect(img);
+  S.lm = r.faceLandmarks && r.faceLandmarks[0] || null; analyse(img);
+  say(S.lm ? 'Face found. Choose a category below.' : 'I could not find a face in that photo. A clear, front-facing photo works best.');
+}
+const toneBox = $('#toneBox');
+toneBox.innerHTML = TONES.map((t, i) => `<label><input type="radio" name="tone" value="${i}" ${i === S.tone ? 'checked' : ''}><i style="background:${t.skin}" aria-hidden="true"></i>${t.name}</label>`).join('');
+toneBox.addEventListener('change', e => { S.tone = +e.target.value; drawDemoBase(); setDemoColours(); say(`Model skin tone: ${TONES[S.tone].name.toLowerCase()}.`); });
+function setDemoColours(){ const t = TONES[S.tone]; S.natLip = hex2rgb(t.lip); S.skin = hex2rgb(t.skin); S.lum = .6; S.uneven = 0; }
+function useDemo(quiet){
+  stopCamera(); resetFace(); show('try'); S.src = 'demo'; drawDemoBase(); setDemoColours(); toneBox.hidden = false;
+  if (!quiet) say('Model ready, lit like a studio. You can change the model\'s skin tone below the shelf. Choose a category, for example lips or blush.');
+}
+$('#goBtn').onclick = audioGuide;
+$('#scrWelcome').addEventListener('click', e => { if (!e.target.closest('button,input,label')) audioGuide(); });
+$('#selfieBtn').onclick = () => needConsent(() => startCamera(false));
+$('#photoBtn').onclick = () => needConsent(() => $('#photo').click());
+$('#demoBtn').onclick = () => useDemo(false);
+$('#photo').onchange = e => { const f = e.target.files[0]; if (f) usePhoto(f); e.target.value = ''; };
+$('#homeBtn').onclick = () => { closeCat(true); setTab('Shades'); };
+$('#closeBtn').onclick = goHome;
+$('#resetBtn').onclick = resetAll;
+$('#saveBtn').onclick = savePic;
+$('#audioPill').onclick = () => { S.prefs.tts = !S.prefs.tts; if (!S.prefs.tts) stopSpeech(); syncPill(); savePrefs(); say(S.prefs.tts ? 'Audio on.' : 'Audio off. Messages still appear in the Assistant tab.'); };
+function syncPill(){ const on = S.prefs.tts && !S.prefs.sr; $('#audioPill').setAttribute('aria-pressed', on); $('#audioPill').textContent = S.prefs.sr ? 'Screen reader mode' : on ? 'Audio on' : 'Audio off'; }
+function audioGuide(){
+  if (S.guideStarted) return; S.guideStarted = true;
+  S.prefs.tts = true; S.prefs.sr = false; savePrefs(); syncPill();
+  say('Welcome to the virtual try-on. I will guide you with my voice. If you already use a screen reader and prefer it, press S or say screen reader. I am turning on voice commands now.');
+  startVoice(true);
+  needConsent(() => startCamera(true));
+  S.guideStarted = false;
+}
+let cdl = null;
+try { if (window.claude && claude.use) claude.use('downloads').then(d => { cdl = d; }).catch(() => {}); } catch (e) {}
+function savePic(){
+  try {
+    cv.toBlob(async b => {
+      if (!b){ say('Could not save the picture.'); return; }
+      if (cdl){ try { await cdl.save({filename:'my-try-on.png', data:b}); say('Picture saved.'); } catch (e) { say('The picture was not saved.'); } return; }
+      const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'my-try-on.png'; document.body.append(a); a.click(); a.remove();
+      say('Picture saved to your downloads.');
+    });
+  } catch (e) { say('Saving pictures is not available here.'); }
+}
+
+/* ---------- measuring light and colour ---------- */
+function analyse(src){
+  const w = 160, h = 120; sc.width = w; sc.height = h; sx.drawImage(src, 0, 0, w, h);
+  const d = sx.getImageData(0, 0, w, h).data;
+  const px = (x, y) => { let r = 0, g = 0, b = 0, n = 0; const X = Math.round(x*w), Y = Math.round(y*h);
+    for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++){ const xx = Math.min(w-1, Math.max(0, X+i)), yy = Math.min(h-1, Math.max(0, Y+j)), o = (yy*w+xx)*4; r += d[o]; g += d[o+1]; b += d[o+2]; n++; }
+    return [r/n, g/n, b/n]; };
+  const Y = c => (.2126*c[0] + .7152*c[1] + .0722*c[2]) / 255;
+  const lm = S.lm;
+  if (!lm){ S.face = null; let s = 0, n = 0; for (let y = .1; y < 1; y += .2) for (let x = .1; x < 1; x += .2){ s += Y(px(x, y)); n++; } S.lum = s/n; return; }
+  let x0 = 1, x1 = 0, y0 = 1, y1 = 0;
+  for (const p of lm){ x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
+  const c = S.cropN;
+  if (c){ const cx = ((x0+x1)/2 - c.x)/c.w, cy = ((y0+y1)/2 - c.y)/c.h; S.face = {cx: S.src === 'video' ? 1-cx : cx, cy, w:(x1-x0)/c.w}; }
+  let L = 0, R = 0, n = 0;
+  for (let y = y0 + (y1-y0)*.2; y < y1; y += (y1-y0)/6){ L += Y(px(x0 + (x1-x0)*.25, y)); R += Y(px(x0 + (x1-x0)*.75, y)); n++; }
+  L /= n; R /= n; S.lum = (L+R)/2; S.uneven = Math.abs(L-R);
+  const avg = arr => arr.reduce((a, q) => [a[0]+q[0]/arr.length, a[1]+q[1]/arr.length, a[2]+q[2]/arr.length], [0,0,0]);
+  const lip = avg(LIPMID.map(([a, b]) => px((lm[a].x+lm[b].x)/2, (lm[a].y+lm[b].y)/2)));
+  const skin = avg(SKINPTS.map(i => px(lm[i].x, lm[i].y)));
+  const ema = (old, nw) => old ? old.map((v, i) => v*.7 + nw[i]*.3) : nw;
+  S.natLip = ema(S.natLip, lip); S.skin = ema(S.skin, skin);
+}
+
+/* ---------- anchors: where each product goes ---------- */
+function normFromLM(lm){
+  const g = i => [lm[i].x, lm[i].y];
+  return {oval:OVAL.map(g), lipO:LIPO.map(g), lipI:LIPI.map(g),
+    eyes:EYE.map(e => ({up:e.up.map(g), low:e.low.map(g)})), brows:BROW.map(b => ({up:b.up.map(g), low:b.low.map(g)})),
+    cheeks:[g(50), g(280)], ears:[g(234), g(454)], mouthC:[g(61), g(291)], chin:g(152), forehead:g(10)};
+}
+const DEMO_NORM = (() => {
+  const N = ([x, y]) => [x/720, y/1080];
+  const oval = []; for (let k = 0; k < 36; k++){ const a = -Math.PI/2 + k*Math.PI*2/36; oval.push([360 + 185*Math.cos(a), 530 + 245*Math.sin(a)]); }
+  const eye = (cx, side) => { const o = [cx + side*35, 472], inn = [cx - side*35, 472], up = [], low = [];
+    for (let k = 0; k <= 8; k++){ const t = k/8, x = o[0] + (inn[0]-o[0])*t; up.push([x, 472 - 15*Math.sin(Math.PI*t)]); low.push([x, 472 + 9*Math.sin(Math.PI*t)]); } return {up, low}; };
+  const brow = (cx, side) => { const up = [], low = [];
+    for (let k = 0; k <= 4; k++){ const t = k/4, x = cx + side*48 - side*92*t, y = 428 - 13*Math.sin(Math.PI*(.2 + .65*t)); up.push([x, y]); low.push([x, y + 8 + 5*t]); } return {up, low}; };
+  const lips = (() => { const o = [], i = [], cx = 360, cy = 665;
+    for (let k = 0; k <= 10; k++){ const t = k/10; o.push([cx - 75 + 150*t, cy - 22*Math.sin(Math.PI*t) + 8*Math.exp(-((t-.5)**2)/.004)]); }
+    for (let k = 1; k <= 9; k++){ const t = 1 - k/10; o.push([cx - 75 + 150*t, cy + 28*Math.sin(Math.PI*t)]); }
+    for (let k = 0; k <= 10; k++){ const t = k/10; i.push([cx - 60 + 120*t, cy + 2 - 3*Math.sin(Math.PI*t)]); }
+    for (let k = 1; k <= 9; k++){ const t = 1 - k/10; i.push([cx - 60 + 120*t, cy + 2 + 4*Math.sin(Math.PI*t)]); }
+    return {o, i}; })();
+  const px = {oval, lipO:lips.o, lipI:lips.i, eyes:[eye(285, -1), eye(435, 1)], brows:[brow(285, -1), brow(435, 1)],
+    cheeks:[[262, 600], [458, 600]], ears:[[178, 548], [542, 548]], mouthC:[[285, 665], [435, 665]], chin:[360, 772], forehead:[360, 300]};
+  const conv = v => Array.isArray(v[0]) || (v[0] && typeof v[0] === 'object') ? v.map(conv) : (typeof v[0] === 'number' ? N(v) : Object.fromEntries(Object.entries(v).map(([k, q]) => [k, conv(q)])));
+  const out = {}; for (const [k, v] of Object.entries(px)) out[k] = conv(v); return out;
+})();
+function mapAnchors(norm, info, c, W, H){
+  const m = ([x, y]) => [(x*info.w - c.sx)/c.sw*W, (y*info.h - c.sy)/c.sh*H];
+  const mp = v => Array.isArray(v[0]) ? v.map(m) : m(v);
+  const A = {oval:mp(norm.oval), lipO:mp(norm.lipO), lipI:mp(norm.lipI), eyes:norm.eyes.map(e => ({up:mp(e.up), low:mp(e.low)})), brows:norm.brows.map(b => ({up:mp(b.up), low:mp(b.low)})),
+    cheeks:mp(norm.cheeks), ears:mp(norm.ears), mouthC:mp(norm.mouthC), chin:m(norm.chin), forehead:m(norm.forehead)};
+  A.fw = dist(A.ears[0], A.ears[1]);
+  const dv = [A.chin[0]-A.forehead[0], A.chin[1]-A.forehead[1]], dl = Math.hypot(dv[0], dv[1]) || 1; A.d = [dv[0]/dl, dv[1]/dl];
+  return A;
+}
+
+/* ---------- painters ---------- */
+function smooth(p, pts){
+  const mid = (a, b) => [(a[0]+b[0])/2, (a[1]+b[1])/2];
+  const m0 = mid(pts[0], pts[1]); p.moveTo(m0[0], m0[1]);
+  for (let k = 1; k <= pts.length; k++){ const a = pts[k % pts.length], m = mid(a, pts[(k+1) % pts.length]); p.quadraticCurveTo(a[0], a[1], m[0], m[1]); }
+  p.closePath();
+}
+const PAINT = {
+  foundation(A, sh){
+    const p = new Path2D(); smooth(p, A.oval);
+    for (const e of A.eyes) smooth(p, e.up.concat(e.low.slice(1, -1).reverse()));
+    for (const b of A.brows) smooth(p, b.up.concat(b.low.slice().reverse()));
+    smooth(p, A.lipO);
+    ctx.save(); ctx.filter = `blur(${(A.fw/40).toFixed(1)}px)`; ctx.globalAlpha = .42; ctx.fillStyle = sh.hex; ctx.fill(p, 'evenodd'); ctx.restore();
+  },
+  concealer(A, sh){
+    ctx.save(); ctx.filter = `blur(${(A.fw/45).toFixed(1)}px)`; ctx.globalAlpha = .5; ctx.fillStyle = sh.hex;
+    for (const e of A.eyes){
+      const n = e.low.length, w = dist(e.low[0], e.low[n-1]);
+      const top = e.low.map(q => add(q, A.d, w*.05));
+      const bot = e.low.map((q, i) => add(q, A.d, w*(.12 + .34*Math.sin(Math.PI*i/(n-1))) + w*.05));
+      const p = new Path2D(); smooth(p, top.concat(bot.slice().reverse())); ctx.fill(p);
+    }
+    ctx.restore();
+  },
+  contour(A, sh){
+    ctx.save(); ctx.filter = `blur(${(A.fw/20).toFixed(1)}px)`; ctx.globalCompositeOperation = 'multiply'; ctx.globalAlpha = .55;
+    ctx.strokeStyle = sh.hex; ctx.lineCap = 'round'; ctx.lineWidth = A.fw*.075;
+    for (let i = 0; i < 2; i++){ const s = add(L2(A.ears[i], A.mouthC[i], .06), A.d, A.fw*.02), e = add(L2(A.ears[i], A.mouthC[i], .48), A.d, -A.fw*.03); ctx.beginPath(); ctx.moveTo(s[0], s[1]); ctx.lineTo(e[0], e[1]); ctx.stroke(); }
+    ctx.restore();
+  },
+  blush(A, sh){
+    ctx.save();
+    for (let i = 0; i < 2; i++){
+      const c = add(L2(A.cheeks[i], A.ears[i], .2), A.d, -A.fw*.025), r = A.fw*.14;
+      const g = ctx.createRadialGradient(c[0], c[1], 0, c[0], c[1], r); g.addColorStop(0, rgba(sh.hex, .55)); g.addColorStop(.6, rgba(sh.hex, .25)); g.addColorStop(1, rgba(sh.hex, 0));
+      ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(c[0], c[1], r*1.2, r*.85, Math.atan2(A.ears[i][1]-A.cheeks[i][1], A.ears[i][0]-A.cheeks[i][0])*.4, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+  },
+  highlight(A, sh){
+    ctx.save(); ctx.globalCompositeOperation = 'screen'; const col = mixHex(sh.hex, '#ffffff', .45);
+    for (let i = 0; i < 2; i++){
+      const c = L2(L2(A.eyes[i].low[0], A.cheeks[i], .5), A.ears[i], .18), r = A.fw*.075;
+      const g = ctx.createRadialGradient(c[0], c[1], 0, c[0], c[1], r); g.addColorStop(0, rgba(col, .6)); g.addColorStop(1, rgba(col, 0));
+      ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(c[0], c[1], r*1.5, r*.7, Math.atan2(A.ears[i][1]-c[1], A.ears[i][0]-c[0]), 0, Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+  },
+  eyeshadow(A, sh){
+    ctx.save(); ctx.filter = `blur(${(A.fw/80).toFixed(1)}px)`;
+    for (const e of A.eyes){
+      const n = e.up.length, w = dist(e.up[0], e.up[n-1]);
+      const top = e.up.map((q, k) => { const t = k/(n-1); return add(q, A.d, -(w*(.14 + .22*Math.sin(Math.PI*t)) + w*.12*(1-t))); });
+      const p = new Path2D(); smooth(p, e.up.concat(top.slice().reverse()));
+      ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = .5; ctx.fillStyle = sh.hex; ctx.fill(p);
+      ctx.globalCompositeOperation = 'multiply'; ctx.globalAlpha = .25; ctx.fill(p);
+      if (sh.gloss){ ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = sh.gloss; ctx.fillStyle = mixHex(sh.hex, '#ffffff', .6); const c = add(e.up[Math.floor(n/2)], A.d, -w*.15); ctx.beginPath(); ctx.ellipse(c[0], c[1], w*.18, w*.07, 0, 0, Math.PI*2); ctx.fill(); }
+    }
+    ctx.restore();
+  },
+  eyeliner(A, sh){
+    ctx.save(); ctx.strokeStyle = sh.hex; ctx.globalAlpha = .9; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (const e of A.eyes){
+      const n = e.up.length, o = e.up[0], inn = e.up[n-1], w = dist(o, inn) || 1, dir = [(o[0]-inn[0])/w, (o[1]-inn[1])/w];
+      const tip = add(add(o, dir, w*.2), A.d, -w*.1);
+      ctx.lineWidth = Math.max(1.5, w*.055); ctx.beginPath(); ctx.moveTo(tip[0], tip[1]);
+      for (const q of e.up){ const r = add(q, A.d, -w*.01); ctx.lineTo(r[0], r[1]); } ctx.stroke();
+    }
+    ctx.restore();
+  },
+  brows(A, sh){
+    ctx.save(); ctx.filter = `blur(${Math.max(.6, A.fw/220).toFixed(1)}px)`;
+    for (const b of A.brows){ const p = new Path2D(); smooth(p, b.up.concat(b.low.slice().reverse())); ctx.globalCompositeOperation = 'multiply'; ctx.globalAlpha = .6; ctx.fillStyle = sh.hex; ctx.fill(p); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = .28; ctx.fill(p); }
+    ctx.restore();
+  },
+  lips(A, sh){
+    const o = A.lipO, i = A.lipI, p = new Path2D(); smooth(p, o); smooth(p, i);
+    const w = dist(o[0], o[10]);
+    ctx.save(); ctx.filter = `blur(${Math.max(1, w/110).toFixed(1)}px)`;
+    ctx.fillStyle = sh.hex; ctx.globalAlpha = .55; ctx.fill(p, 'evenodd');
+    ctx.globalCompositeOperation = 'multiply'; ctx.globalAlpha = .42; ctx.fill(p, 'evenodd');
+    ctx.globalCompositeOperation = 'source-over'; ctx.filter = 'none';
+    if (sh.gloss){ ctx.clip(p, 'evenodd'); const gx = (o[15][0]+i[15][0])/2, gy = o[15][1]*.55 + i[15][1]*.45;
+      const g = ctx.createRadialGradient(gx, gy, 0, gx, gy, w*.16); g.addColorStop(0, `rgba(255,255,255,${sh.gloss*2})`); g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.globalAlpha = 1; ctx.fillStyle = g; ctx.fillRect(gx - w*.2, gy - w*.08, w*.4, w*.16); }
+    ctx.restore();
+  }
+};
+
+/* ---------- drawing ---------- */
+function drawDemoBase(){
+  const d = dctx, t = TONES[S.tone], N = DEMO_NORM, P = ([x, y]) => [x*720, y*1080];
+  const bg = d.createLinearGradient(0, 0, 0, 1080); bg.addColorStop(0, '#d9d3cc'); bg.addColorStop(1, '#8f8983'); d.fillStyle = bg; d.fillRect(0, 0, 720, 1080);
+  const el = (x, y, rx, ry, f) => { d.beginPath(); d.ellipse(x, y, rx, ry, 0, 0, Math.PI*2); d.fillStyle = f; d.fill(); };
+  el(360, 520, 255, 340, t.hair);
+  d.fillStyle = mixHex(t.skin, '#000000', .14); d.fillRect(298, 700, 124, 260);
+  el(360, 1090, 330, 190, '#1b1b1b');
+  el(178, 548, 22, 44, mixHex(t.skin, '#000000', .08)); el(542, 548, 22, 44, mixHex(t.skin, '#000000', .08));
+  el(360, 530, 185, 245, t.skin);
+  const sh = d.createRadialGradient(320, 450, 40, 360, 560, 300); sh.addColorStop(0, 'rgba(255,255,255,.14)'); sh.addColorStop(1, 'rgba(0,0,0,.18)');
+  d.fillStyle = sh; d.beginPath(); d.ellipse(360, 530, 185, 245, 0, 0, Math.PI*2); d.fill();
+  d.beginPath(); d.moveTo(170, 470); d.quadraticCurveTo(200, 250, 360, 262); d.quadraticCurveTo(530, 250, 552, 470); d.quadraticCurveTo(500, 330, 360, 340); d.quadraticCurveTo(230, 330, 170, 470); d.fillStyle = t.hair; d.fill();
+  for (const b of N.brows){ const p = new Path2D(); smooth(p, b.up.map(P).concat(b.low.map(P).reverse())); d.fillStyle = rgba(t.hair, .75); d.fill(p); }
+  for (const e of N.eyes){
+    const up = e.up.map(P), low = e.low.map(P), p = new Path2D(); smooth(p, up.concat(low.slice(1, -1).reverse()));
+    d.fillStyle = '#f3eeea'; d.fill(p); d.save(); d.clip(p); const c = L2(up[4], low[4], .45); el(c[0], c[1], 11, 11, '#3b2618'); el(c[0], c[1], 5, 5, '#0d0806'); el(c[0]-3, c[1]-3, 2.5, 2.5, '#fff'); d.restore();
+    d.strokeStyle = '#1a1210'; d.lineWidth = 2.5; d.beginPath(); d.moveTo(up[0][0], up[0][1]); for (const q of up) d.lineTo(q[0], q[1]); d.stroke();
+  }
+  d.strokeStyle = mixHex(t.skin, '#000000', .3); d.lineWidth = 3.5; d.lineCap = 'round';
+  d.beginPath(); d.moveTo(352, 500); d.quadraticCurveTo(344, 565, 334, 578); d.quadraticCurveTo(360, 592, 386, 578); d.stroke();
+  const p = new Path2D(); smooth(p, N.lipO.map(P)); smooth(p, N.lipI.map(P)); d.fillStyle = t.lip; d.fill(p, 'evenodd');
+}
+function sizeCanvas(){
+  const m = $('#mirror'), r = Math.min(2, window.devicePixelRatio || 1), W = Math.round(m.clientWidth*r), H = Math.round(m.clientHeight*r);
+  if (W && H && (cv.width !== W || cv.height !== H)){ cv.width = W; cv.height = H; }
+}
+new ResizeObserver(sizeCanvas).observe($('#mirror'));
+function srcInfo(){
+  if (S.src === 'video' && video.readyState >= 2) return {el:video, w:video.videoWidth, h:video.videoHeight, mirror:true};
+  if (S.src === 'photo' && S.img) return {el:S.img, w:S.img.naturalWidth, h:S.img.naturalHeight, mirror:false};
+  if (S.src === 'demo') return {el:demoCv, w:720, h:1080, mirror:false};
+  return null;
+}
+function render(){
+  const W = cv.width, H = cv.height, info = srcInfo();
+  ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0, 0, W, H);
+  if (!info || !info.w) return;
+  const k = Math.max(W/info.w, H/info.h), c = {sw:W/k, sh:H/k}; c.sx = (info.w - c.sw)/2; c.sy = (info.h - c.sh)/2;
+  S.cropN = {x:c.sx/info.w, y:c.sy/info.h, w:c.sw/info.w, h:c.sh/info.h};
+  ctx.save(); if (info.mirror){ ctx.translate(W, 0); ctx.scale(-1, 1); } ctx.drawImage(info.el, c.sx, c.sy, c.sw, c.sh, 0, 0, W, H); ctx.restore();
+  const norm = S.src === 'demo' ? DEMO_NORM : (S.lm ? normFromLM(S.lm) : null);
+  if (norm && !S.bare && Object.keys(S.applied).length){
+    const A = mapAnchors(norm, info, c, W, H);
+    ctx.save(); if (S.split){ ctx.beginPath(); ctx.rect(W/2, 0, W/2, H); ctx.clip(); }
+    if (info.mirror){ ctx.translate(W, 0); ctx.scale(-1, 1); }
+    for (const id of ORDER){ const sh = shadeOf(id); if (sh) PAINT[id](A, sh); }
+    ctx.restore();
+  }
+  if (S.split){
+    ctx.save(); ctx.fillStyle = '#fff'; ctx.fillRect(W/2 - 1.5, 0, 3, H);
+    const fs = Math.round(W/24); ctx.font = `700 ${fs}px Montserrat, sans-serif`;
+    const tag = (t, x) => { const m = ctx.measureText(t).width; ctx.fillStyle = '#000b'; ctx.fillRect(x - m/2 - 10, H*.62, m + 20, fs*1.6); ctx.fillStyle = '#fff'; ctx.fillText(t, x - m/2, H*.62 + fs*1.15); };
+    tag('Before', W*.25); tag('After', W*.75); ctx.restore();
+  }
+}
+function frame(now){
+  requestAnimationFrame(frame);
+  if (S.screen !== 'try') return;
+  if (S.src === 'video' && video.readyState >= 2){
+    if (landmarker && S.mode === 'VIDEO' && video.currentTime !== S.lastT){
+      S.lastT = video.currentTime;
+      try { const r = landmarker.detectForVideo(video, now); S.lm = r.faceLandmarks && r.faceLandmarks[0] || null; } catch (e) {}
+    }
+    if (++S.tick % 8 === 0) analyse(video);
+    guideStep(now);
+  }
+  render();
+  if (++S.tick % 30 === 0) status();
+}
+function status(force){
+  const chip = $('#chip');
+  const face = S.src === 'demo' ? 'Model' : S.lm ? 'Face found' : S.src === 'video' ? (landmarker ? 'Looking for a face' : 'Loading') : S.src === 'photo' ? 'No face found' : '';
+  const light = S.src === 'demo' ? 'Studio light' : S.lum == null ? '' : lumWarn() ? 'Low light' : 'Light good';
+  chip.textContent = [face, light].filter(Boolean).join(' · ');
+  const ids = ORDER.filter(id => S.applied[id]);
+  const lbl = `Mirror, ${S.src === 'video' ? 'live camera' : S.src === 'demo' ? 'model' : S.src || 'empty'}. ${face}. ${ids.length ? 'Wearing ' + ids.map(id => `${CAT[id].label.toLowerCase()} ${shadeOf(id).label}`).join(', ') : 'No make-up'}${S.split ? '. Before and after split' : ''}.`;
+  if (lbl !== S.label || force){ S.label = lbl; cv.setAttribute('aria-label', lbl); }
+}
+
+/* ---------- compare ---------- */
+function toggleSplit(){ S.split = !S.split; $('#splitBtn').setAttribute('aria-pressed', S.split); say(S.split ? 'Split view on. The left half shows no make-up, the right half shows your look.' : 'Split view off.'); }
+$('#splitBtn').onclick = toggleSplit;
+$('#lookBtn').onclick = describeLook;
+$('#bareBtn').onclick = () => { S.bare = !S.bare; $('#bareBtn').setAttribute('aria-pressed', S.bare); say(S.bare ? 'Make-up hidden.' : 'Make-up shown.'); };
+$('#descBtn').onclick = describe; $('#suitBtn').onclick = opinion; $('#lightBtn').onclick = lightCheck; guideBtn.onclick = () => toggleGuide();
+
+/* ---------- commands ---------- */
+function help(){
+  say('Say or type a category: looks, lips, foundation, concealer, blush, contour, highlight, eyeshadow, eyeliner or brows. Then say next, previous, or a shade name. Other commands: describe, whole look, does it suit me, remove, undo, reset, before and after, light check, guide me, save picture, favourite, slower, faster, screen reader, settings. Keys: 1 to 9 for categories, 0 for looks, N next, P previous, D describe, W whole look, U undo, G guide, L light, V voice, S screen reader, H help.');
+}
+function srMode(){
+  S.prefs.sr = !S.prefs.sr; savePrefs(); syncPill();
+  if (S.prefs.sr){ stopSpeech(); say('Screen reader mode on. The built-in voice is off and your screen reader will read every message. Press S again to switch back.'); }
+  else say('Built-in voice on. Screen reader mode off.');
+}
+function rate(d){ S.prefs.rate = Math.max(.7, Math.min(1.5, +(S.prefs.rate + d).toFixed(2))); savePrefs(); say(`Speaking ${d > 0 ? 'faster' : 'slower'}.`); }
+const CATWORDS = [['looks',/\blooks?\b/],['eyeliner',/eye ?liner|\bliner/],['eyeshadow',/eye ?shadow|shadow/],['brows',/brow/],['concealer',/conceal/],['foundation',/foundation|\bbase\b/],['blush',/blush/],['contour',/contour|bronz/],['highlight',/highlight|\bglow\b/],['lips',/\blips?\b|lipstick/]];
+function findShade(c, only){
+  const order = only ? [only] : S.cat && S.cat !== 'looks' ? [S.cat].concat(CATS.map(x => x.id).filter(x => x !== S.cat)) : CATS.map(x => x.id);
+  const num = (c.match(/\b(\d{3})\b/) || [])[1], cm = c.match(/\b([ncw])\s?(\d{1,2})\b/), code = cm ? cm[1] + cm[2] : null;
+  for (const test of [s => num && s.num === num, s => code && s.code === code])
+    for (const id of order) for (const p of CAT[id].products){ const s = p.shades.find(test); if (s) return s; }
+  let best = null, bl = 0;
+  for (const id of order) for (const p of CAT[id].products) for (const s of p.shades){
+    let l = 0;
+    if (s.words.length > 2 && c.includes(s.words)) l = 100 + s.words.length;
+    else for (const w of s.words.split(' ')) if (w.length > 3 && new RegExp('\\b' + w + '\\b').test(c)) l += w.length;
+    if (l > bl){ bl = l; best = s; }
+  }
+  return best;
+}
+function run(raw){
+  const c = raw.toLowerCase().trim(); if (!c) return;
+  if (S.screen === 'consent'){ if (/agree|yes|accept|okay|ok\b/.test(c)) return agree(); if (/not now|\bno\b|back|cancel|stop/.test(c)) return $('#notNowBtn').click(); }
+  if (/screen ?reader/.test(c)) return srMode();
+  if (/setting/.test(c)) return openSettings();
+  if (/help|what can i say|commands/.test(c)) return help();
+  if (S.screen === 'welcome'){ if (/model|demo/.test(c)) return useDemo(false); if (/camera|selfie|start/.test(c)) return needConsent(() => startCamera(false)); }
+  if (/whole look|full look|everything|what am i wearing/.test(c)) return describeLook();
+  if (/suit|look good|opinion|what do you think/.test(c)) return opinion();
+  if (/describe|tell me|how do i look|what is this/.test(c)) return describe();
+  if (/before|after|compare|split/.test(c)) return toggleSplit();
+  if (/reset|remove all|clear all|start over|take (it )?all off/.test(c)) return resetAll();
+  if (/undo/.test(c)) return undo();
+  if (/remove|take (it )?off|no colou?r|\bnone\b/.test(c)) return S.focus ? setShade(S.focus, 0, -1) : say('Nothing to remove.');
+  if (/lighting|light check|check (my )?light/.test(c)) return lightCheck();
+  if (/frame|guide|position|cent(er|re)/.test(c)) return toggleGuide(true);
+  if (/save|download|picture|photo of/.test(c)) return savePic();
+  if (/favou?rite|heart/.test(c)) return toggleFav();
+  if (/slow/.test(c)) return rate(-.15);
+  if (/fast|quick/.test(c)) return rate(.15);
+  if (/stop|close|exit/.test(c)) return goHome();
+  const li = LOOKS.findIndex(L => c.includes(L.name.toLowerCase())); if (li > -1){ openCat('looks', 'nofocus'); syncSwatch(li); return applyLook(li); }
+  if (S.cat === 'lips' && /\bmatte\b|liquid|infallible/.test(c)){ S.prodSel.lips = 1; return openCat('lips', true); }
+  if (S.cat === 'lips' && /satin|colou?r riche/.test(c)){ S.prodSel.lips = 0; return openCat('lips', true); }
+  const cw = CATWORDS.find(([, re]) => re.test(c));
+  const sh = cw ? (cw[0] === 'looks' ? null : findShade(c, cw[0])) : findShade(c);
+  if (sh){ S.prodSel[sh.cat] = sh.p; if (S.cat !== sh.cat) openCat(sh.cat, 'nofocus'); else openCat(sh.cat, false); setShade(sh.cat, sh.p, sh.s); syncSwatch(sh.s); return; }
+  if (cw) return openCat(cw[0], true);
+  if (/next|another|right/.test(c)) return step(1);
+  if (/previous|back|left|last/.test(c)) return S.cat && /back/.test(c) && !/go back one/.test(c) ? closeCat(true) : step(-1);
+  if (/demo|model/.test(c)) return useDemo(false);
+  if (/camera/.test(c)) return needConsent(() => startCamera(false));
+  say(`Sorry, I did not find a command in "${raw.trim()}". Say help to hear the options.`);
+}
+$('#cmdForm').addEventListener('submit', e => { e.preventDefault(); const i = $('#cmd'); run(i.value); i.value = ''; });
+
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, recOn = false, cdict = null;
+try { if (window.claude && claude.use) claude.use('dictation').then(d => { if (d){ cdict = d;
+  d.onPartial(({text}) => showHeard(text, true));
+  d.onFinal(({text}) => heardFinal(text));
+  d.onState(({state}) => { if (state !== 'listening' && recOn){ setVoice(false); showHeard('Voice paused. Press V or the Voice button to talk again.'); } });
+} }).catch(() => {}); } catch (e) {}
+const voiceBtn = $('#voiceBtn'), micPill = $('#micPill'), heardBar = $('#heardBar');
+let heardT = 0;
+function showHeard(t, partial){ heardBar.hidden = false; heardBar.textContent = partial ? `Listening: ${t}` : t; clearTimeout(heardT); heardT = setTimeout(() => { heardBar.hidden = true; }, partial ? 6000 : 4000); }
+function setVoice(on){
+  recOn = on;
+  for (const b of [voiceBtn, micPill]) b.setAttribute('aria-pressed', on);
+  voiceBtn.textContent = `Voice: ${on ? 'on' : 'off'}`; micPill.textContent = on ? 'Listening' : 'Voice off';
+}
+function heardFinal(raw){
+  const t = raw.trim(); if (!t) return;
+  const c = t.toLowerCase().replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  // a phrase of 3+ words that the page itself just said is its own echo; short commands always count
+  if (isSpeaking() && S.lastSaid && c.split(' ').length >= 3 && S.lastSaid.includes(c)) return;
+  stopSpeech();
+  showHeard(`Heard: "${t}"`);
+  run(t);
+}
+function voiceError(code){
+  const msg = {'not-allowed':'Microphone access was refused. Allow the microphone for this site in the browser address bar, then press V.',
+    'service-not-allowed':'This browser does not allow speech recognition here. Use Chrome or Edge on the hosted site, or type commands.',
+    'audio-capture':'No microphone was found. Check that a microphone is connected and allowed for the browser in your computer settings.',
+    'network':'The speech service could not be reached. Check the internet connection; typing and keys still work.'}[code];
+  if (!msg) return false;
+  setVoice(false); showHeard(msg); say(msg); return true;
+}
+function startVoice(queue){
+  if (cdict){
+    cdict.start().then(() => { setVoice(true); say('Listening. Say a command, for example lips, next or describe.', queue); })
+      .catch(e => { setVoice(false); say(e && e.code === 'not_granted' ? 'Microphone access was refused. You can type commands or use keys instead.' : 'Voice could not start. Press V to try again.'); });
+    return;
+  }
+  if (!SR){ setVoice(false); say('Voice commands are not available in this browser; Chrome or Edge work best. You can use keys or type commands instead.', queue); return; }
+  if (!rec){
+    rec = new SR(); rec.lang = 'en-US'; rec.continuous = true; rec.interimResults = true;
+    rec.onresult = e => {
+      for (let i = e.resultIndex; i < e.results.length; i++){
+        const r = e.results[i], t = r[0].transcript;
+        if (r.isFinal) heardFinal(t); else showHeard(t, true);
+      }
+    };
+    rec.onerror = e => { voiceError(e.error); };
+    rec.onend = () => { if (recOn) setTimeout(() => { try { rec.start(); } catch (err) {} }, 250); };
+  }
+  try { rec.start(); setVoice(true); showHeard('Listening. Say a command, for example lips, next or describe.'); say('Voice commands on. Say help at any time.', queue); }
+  catch (e) { setVoice(true); }
+}
+function stopVoice(){ setVoice(false); if (cdict) cdict.stop().catch(() => {}); if (rec) try { rec.stop(); } catch (e) {} say('Voice commands off.'); }
+function stopVoiceIfGuide(){}
+voiceBtn.onclick = () => recOn ? stopVoice() : startVoice();
+micPill.onclick = () => recOn ? stopVoice() : startVoice();
+
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+  if (e.target.closest('input[type=text],select,textarea,dialog,summary')) return;
+  const k = e.key.toLowerCase();
+  if (S.screen === 'consent'){ if (k === 'a'){ e.preventDefault(); agree(); } else if (k === 'escape'){ $('#notNowBtn').click(); } return; }
+  if (S.screen === 'welcome'){ if ((k === 'enter' || k === ' ') && !e.target.closest('button')){ e.preventDefault(); audioGuide(); } if (k === 'h') help(); if (k === 's') srMode(); return; }
+  if (k === 'escape' && S.cat){ closeCat(true); return; }
+  if (/^[0-9]$/.test(k)){ e.preventDefault(); openCat(k === '0' ? 'looks' : CATS[+k - 1].id, true); return; }
+  const map = {n:() => step(1), p:() => step(-1), d:describe, w:describeLook, g:() => toggleGuide(), l:lightCheck, u:undo, h:help, s:srMode, v:() => recOn ? stopVoice() : startVoice()};
+  if (map[k]){ e.preventDefault(); map[k](); }
+});
+
+/* ---------- settings ---------- */
+const dlg = $('#setDlg'), form = $('#setForm');
+function savePrefs(){ try { localStorage.setItem('itoPrefs', JSON.stringify(S.prefs)); } catch (e) {} }
+function applyPrefs(){ const p = S.prefs; root.classList.toggle('big', p.big); root.classList.toggle('hc', p.hc); root.classList.toggle('calm', p.calm); syncPill(); }
+function fillForm(){
+  for (const k of ['tts','sr','voice','big','hc','calm']) form.elements[k].checked = !!S.prefs[k];
+  form.elements.rate.value = String(S.prefs.rate);
+  loadVoices();
+  const sel = form.elements.vname, opts = [['auto', 'Automatic: most natural voice available']];
+  if (ctts) for (const [v, l] of [['buttery','warm'],['airy','light'],['rounded','soft'],['glassy','clear']]) opts.push(['claude:' + v, `Claude voice, ${l}`]);
+  for (const v of voices) opts.push([v.name, `${v.name} (${v.lang})`]);
+  sel.innerHTML = ''; for (const [v, l] of opts){ const o = document.createElement('option'); o.value = v; o.textContent = l; sel.append(o); }
+  sel.value = opts.some(o => o[0] === S.prefs.vname) ? S.prefs.vname : 'auto';
+}
+function openSettings(){ fillForm(); dlg.showModal(); }
+$('#testVoice').onclick = () => { const old = S.prefs.rate; S.prefs.rate = +form.elements.rate.value; speak('Hello. This is how I will describe each shade. Classic Ivory 101 is a fair foundation shade.', false, form.elements.vname.value); S.prefs.rate = old; };
+form.addEventListener('submit', e => {
+  e.preventDefault(); const was = S.prefs.voice;
+  for (const k of ['tts','sr','voice','big','hc','calm']) S.prefs[k] = form.elements[k].checked;
+  S.prefs.rate = +form.elements.rate.value; S.prefs.vname = form.elements.vname.value || 'auto';
+  applyPrefs(); savePrefs(); dlg.close();
+  if (S.prefs.voice && !recOn) startVoice(); else if (!S.prefs.voice && was && recOn) stopVoice();
+  say('Settings saved.');
+});
+$('#setBtn1').onclick = openSettings; $('#setBtn2').onclick = openSettings;
+
+let saved = null;
+try { saved = JSON.parse(localStorage.getItem('itoPrefs')); } catch (e) {}
+if (saved) { Object.assign(S.prefs, saved); S.prefs.voice = false; }
+else { S.prefs.hc = matchMedia('(prefers-contrast: more)').matches; S.prefs.calm = matchMedia('(prefers-reduced-motion: reduce)').matches; }
+applyPrefs();
+const hello = document.createElement('p'); hello.textContent = 'Hello. Choose a category below, or press H for help.'; log.prepend(hello);
+drawDemoBase(); show('welcome');
+requestAnimationFrame(frame);
+}
+</script>
+</body>
+</html>
